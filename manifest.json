@@ -5,7 +5,7 @@
   "author": "toco927",
   "description": "A simple test plugin that displays a customizable message",
   "entry_point": "manager.py",
-  "class_name": "HelloWorld Plugin",
+  "class_name": "HelloWorldPlugin",
   "category": "demo",
   "tags": [
     "demo",
