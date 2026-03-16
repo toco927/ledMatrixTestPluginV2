@@ -1,8 +1,8 @@
 {
-  "id": "hello-world",
-  "name": "Hello World",
+  "id": "hello-world2",
+  "name": "Hello World Trevor",
   "version": "1.0.2",
-  "author": "ChuckBuilds",
+  "author": "toco927",
   "description": "A simple test plugin that displays a customizable message",
   "entry_point": "manager.py",
   "class_name": "HelloWorld Plugin",
@@ -15,7 +15,7 @@
   "display_modes": [
     "hello-world"
   ],
-  "download_url_template": "https://github.com/ChuckBuilds/ledmatrix-hello-world/archive/refs/tags/v{version}.zip",
+  "download_url_template": "https://github.com/toco927/ledMatrixTestPluginV2/archive/refs/tags/v{version}.zip",
   "versions": [
     {
       "released": "2025-10-19",
@@ -29,6 +29,6 @@
   "verified": true,
   "screenshot": "",
   "config_schema": "config_schema.json",
-   "compatible_versions": [">=2.0.0"],
+   "compatible_versions": [">=2.0.0"]
 }
 
