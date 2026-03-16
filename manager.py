@@ -29,7 +29,7 @@ class HelloWorldPlugin(BasePlugin):
         super().__init__(plugin_id, config, display_manager, cache_manager, plugin_manager)
 
         # Plugin-specific configuration
-        self.message = config.get('message', 'Hello, World!')
+        self.message = config.get('message', 'Trevor made this')
         self.show_time = config.get('show_time', True)
         self.color = tuple(config.get('color', [255, 255, 255]))
         self.time_color = tuple(config.get('time_color', [0, 255, 255]))
