@@ -1,7 +1,7 @@
 {
-  "id": "hello-world2",
-  "name": "Hello World Trevor",
-  "version": "1.0.2",
+  "id": "hello-world",
+  "name": "Hello World",
+  "version": "1.0.0",
   "author": "toco927",
   "description": "A simple test plugin that displays a customizable message",
   "entry_point": "manager.py",
