@@ -1,8 +1,8 @@
 {
-  "_comment": "Add this to your config/config.json to enable the Hello World plugin",
-  "hello-world": {
+  "_comment": "Add this to your config/config.json to enable the Trevor's World plugin",
+  "trevor-world": {
     "enabled": true,
-    "message": "Hello, World!",
+    "message": "Hello, Trevor!",
     "show_time": true,
     "color": [255, 255, 255],
     "time_color": [0, 255, 255],
