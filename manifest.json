@@ -1,29 +1,30 @@
 {
-  "id": "hello-world",
-  "name": "Hello World",
-  "version": "1.0.0",
+  "id": "trevor-world",
+  "name": "Trevor's World",
+  "version": "1.0.1",
   "author": "toco927",
-  "description": "A simple test plugin that displays a customizable message",
+  "description": "A simple test plugin that displays a customizable message. Testing purposes.",
   "entry_point": "manager.py",
-  "class_name": "HelloWorldPlugin",
+  "class_name": "TrevorWorldPlugin",
   "category": "demo",
   "tags": [
     "demo",
     "test",
+    "trevor",
     "simple"
   ],
   "display_modes": [
-    "hello-world"
+    "trevor-world"
   ],
   "download_url_template": "https://github.com/toco927/ledMatrixTestPluginV2/archive/refs/tags/v{version}.zip",
   "versions": [
     {
-      "released": "2025-10-19",
+      "released": "2026-03-16",
       "version": "1.0.1",
       "ledmatrix_min": "2.0.0"
     }
   ],
-  "last_updated": "2025-10-19",
+  "last_updated": "2026-03-15",
   "stars": 0,
   "downloads": 0,
   "verified": true,

@@ -1,5 +1,5 @@
 """
-Hello World Plugin
+Trevor's World Plugin
 
 A simple test plugin that displays a customizable greeting message
 on the LED matrix. Used to demonstrate and test the plugin system.
@@ -16,10 +16,10 @@ except ImportError:
     freetype = None
 
 
-class HelloWorldPlugin(BasePlugin):
+class TrevorWorldPlugin(BasePlugin):
     """
-    Simple Hello World plugin for LEDMatrix.
-    
+    Simple Trevor's World plugin for LEDMatrix.
+
     Displays a customizable greeting message with the current time.
     Demonstrates basic plugin functionality.
     """
@@ -41,7 +41,7 @@ class HelloWorldPlugin(BasePlugin):
         self.last_update = None
         self.current_time_str = ""
 
-        self.logger.info(f"Hello World plugin initialized with message: '{self.message}'")
+        self.logger.info(f"Trevor's World plugin initialized with message: '{self.message}'")
 
         # Register fonts
         self._register_fonts()
@@ -72,7 +72,7 @@ class HelloWorldPlugin(BasePlugin):
                 color=self.time_color
             )
 
-            self.logger.info("Hello World fonts registered")
+            self.logger.info("Trevor's World fonts registered")
         except Exception as e:
             self.logger.warning(f"Error registering fonts: {e}")
 
@@ -279,6 +279,6 @@ class HelloWorldPlugin(BasePlugin):
         """
         Cleanup resources when plugin is unloaded.
         """
-        self.logger.info("Cleaning up Hello World plugin")
+        self.logger.info("Cleaning up Trevor's World plugin")
         super().cleanup()
 

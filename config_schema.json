@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "title": "Hello World Plugin Configuration",
-  "description": "Configuration schema for the Hello World test plugin",
+  "title": "Trevor's World Plugin Configuration",
+  "description": "Configuration schema for Trevor's World test plugin",
   "properties": {
     "enabled": {
       "type": "boolean",
@@ -11,7 +11,7 @@
     },
     "message": {
       "type": "string",
-      "default": "Hello, Worlld!",
+      "default": "Trevor's Test Plug-in",
       "minLength": 1,
       "maxLength": 50,
       "description": "The greeting message to display"
