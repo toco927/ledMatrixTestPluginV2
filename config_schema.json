@@ -2,19 +2,24 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "title": "Trevor's World Plugin Configuration",
-  "description": "Configuration schema for Trevor's World test plugin",
+  "description": "Configuration schema for Trevor's World plugin with message queue support",
   "properties": {    
     "enabled": {
       "type": "boolean",
       "default": true,
       "description": "Enable or disable this plugin"
     },
+    "queue_mode": {
+      "type": "boolean",
+      "default": false,
+      "description": "Enable message queue mode (cycles through multiple messages) or single message mode"
+    },
     "message": {
       "type": "string",
       "default": "Trevor's Test Plug-in",
       "minLength": 1,
       "maxLength": 50,
-      "description": "The greeting message to display"
+      "description": "The greeting message to display (used in single message mode when queue_mode is false)"
     },
     "font_family": {
       "type": "string",
@@ -102,6 +107,109 @@
       "default": 32,
       "minimum": 0,
       "description": "Gap width in pixels between scroll loops (space between end and start of text when looping)"
+    },
+    "message_queue": {
+      "type": "array",
+      "description": "Array of messages to cycle through (used when queue_mode is true)",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for this message"
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Sort order for message (optional, uses array position as fallback)"
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "The message text to display"
+          },
+          "display_duration": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 300,
+            "description": "How long to display this message in seconds"
+          },
+          "color": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "RGB color override for this message [R, G, B]"
+          },
+          "time_color": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "RGB color override for time in this message [R, G, B]"
+          },
+          "show_time": {
+            "type": "boolean",
+            "description": "Override show_time setting for this message"
+          },
+          "scroll_enabled": {
+            "type": "boolean",
+            "description": "Override scroll_enabled setting for this message"
+          },
+          "scroll_speed": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 10,
+            "description": "Override scroll_speed for this message"
+          },
+          "scroll_delay": {
+            "type": "number",
+            "minimum": 0.001,
+            "maximum": 0.1,
+            "description": "Override scroll_delay for this message"
+          },
+          "message_font_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Override message_font_size for this message"
+          },
+          "time_font_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Override time_font_size for this message"
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Include this message in the queue (set false to skip)"
+          }
+        },
+        "required": ["message"],
+        "additionalProperties": false
+      }
+    },
+    "empty_queue_message": {
+      "type": "string",
+      "default": "Queue Empty",
+      "minLength": 1,
+      "maxLength": 50,
+      "description": "Message to display when queue is empty or complete (queue_mode only)"
+    },
+    "cache_file": {
+      "type": "string",
+      "default": ".trevor_world_queue_state",
+      "description": "File path for persisting queue state (queue_mode only)"
     }
   },
   "required": ["enabled"],
