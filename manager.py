@@ -1,8 +1,9 @@
 """
 Trevor's World Plugin
 
-A simple test plugin that displays a customizable greeting message
-on the LED matrix. Used to demonstrate and test the plugin system.
+A message queue plugin that displays a customizable list of messages
+on the LED matrix with individual settings for each message.
+Supports scrolling, custom colors, fonts, and persistence across restarts.
 """
 
 from src.plugin_system.base_plugin import BasePlugin
@@ -10,6 +11,7 @@ import time
 from datetime import datetime
 import os
 from pathlib import Path
+import json
 
 # --- Scrolling and caching additions ---
 from PIL import Image, ImageDraw, ImageFont
@@ -22,32 +24,47 @@ except ImportError:
 
 class TrevorWorldPlugin(BasePlugin):
     """
-    Simple Trevor's World plugin for LEDMatrix.
+    Trevor's World plugin for LEDMatrix with message queue support.
 
-    Displays a customizable greeting message with the current time.
-    Demonstrates basic plugin functionality.
+    Displays messages from a queue with individual settings for each message.
+    Supports scrolling, custom colors, fonts, and persists state across restarts.
     """
     
     def __init__(self, plugin_id, config, display_manager, cache_manager, plugin_manager):
-        """Initialize the Hello World plugin."""
+        """Initialize the Trevor's World plugin with queue support."""
         super().__init__(plugin_id, config, display_manager, cache_manager, plugin_manager)
 
-        # Plugin-specific configuration
-        self.message = config.get('message', 'Trevor made this')
+        # Queue mode configuration
+        self.queue_mode = config.get('queue_mode', False)
+        self.message_queue = config.get('message_queue', [])
+        self.empty_queue_message = config.get('empty_queue_message', 'Queue Empty')
+        self.cache_file = config.get('cache_file', '.trevor_world_queue_state')
+        
+        # Queue state
+        self.current_queue_index = 0
+        self.queue_complete = False
+        self.message_start_time = time.time()
+        self.message_change_pending = False
+        
+        # Default display settings (used as fallback for queue messages)
         self.show_time = config.get('show_time', True)
+        self.font_family = config.get('font_family', 'press_start')
+        self.message_font_size = config.get('message_font_size', 10)
+        self.time_font_size = config.get('time_font_size', 8)
         self.color = tuple(config.get('color', [255, 255, 255]))
         self.time_color = tuple(config.get('time_color', [0, 255, 255]))
-        
-        self.font_family = config.get('font_family', 'press_start')
-        self.message_font_size = config.get('message_font_size', 10)  # Font size for message
-        self.time_font_size = config.get('time_font_size', 8)  # Font size for time
-
-        # Scrolling config
         self.scroll_enabled = config.get('scroll_enabled', False)
-        self.scroll_speed = float(config.get('scroll_speed', 1))  # pixels per frame
-        self.scroll_delay = float(config.get('scroll_delay', 0.01))  # seconds per frame
+        self.scroll_speed = float(config.get('scroll_speed', 1))
+        self.scroll_delay = float(config.get('scroll_delay', 0.01))
         self.scroll_loop = config.get('scroll_loop', True)
         self.scroll_gap_width = config.get('scroll_gap_width', 32)
+        self.display_duration = config.get('display_duration', 5)
+        
+        # Single message mode (non-queue)
+        if not self.queue_mode:
+            self.message = config.get('message', 'Trevor made this')
+        else:
+            self.message = ''  # Will be set from queue
 
         # Font/image cache
         self.font = None
@@ -62,12 +79,20 @@ class TrevorWorldPlugin(BasePlugin):
         # State
         self.last_update = None
         self.current_time_str = ""
+        self.message_start_time = time.time()  # Track when current message started
 
         # Load font and calculate dimensions
         self._load_font()
         self._calculate_text_dimensions()
 
-        self.logger.info(f"Trevor's World plugin initialized with message: '{self.message}'")
+        self.logger.info(f"Trevor's World plugin initialized (queue_mode={self.queue_mode})")
+        
+        if self.queue_mode:
+            self._load_queue_state()
+            self._load_current_message_settings()
+            self.logger.info(f"Queue mode enabled with {len(self.message_queue)} messages")
+        else:
+            self.logger.info(f"Single message mode: '{self.message}'")
 
         # Register fonts
         self._register_fonts()
@@ -107,6 +132,113 @@ class TrevorWorldPlugin(BasePlugin):
             self.logger.debug(f"Font manager registration skipped: {e}")
         except Exception as e:
             self.logger.warning(f"Error registering fonts: {e}")
+
+    def _get_cache_file_path(self):
+        """Get the full path to the queue state cache file."""
+        # Try to store in plugin directory, fallback to temp
+        try:
+            plugin_dir = Path(__file__).parent
+            cache_path = plugin_dir / self.cache_file
+            return cache_path
+        except Exception:
+            return Path(self.cache_file)
+
+    def _load_queue_state(self):
+        """Load saved queue state (last displayed message index)."""
+        try:
+            cache_path = self._get_cache_file_path()
+            if cache_path.exists():
+                with open(cache_path, 'r') as f:
+                    state = json.load(f)
+                    self.current_queue_index = state.get('current_index', 0)
+                    self.queue_complete = state.get('queue_complete', False)
+                    self.logger.info(f"Loaded queue state: index={self.current_queue_index}, complete={self.queue_complete}")
+            else:
+                self.current_queue_index = 0
+                self.queue_complete = False
+        except Exception as e:
+            self.logger.warning(f"Could not load queue state: {e}, resetting to start")
+            self.current_queue_index = 0
+            self.queue_complete = False
+
+    def _save_queue_state(self):
+        """Save current queue state (for resuming after restart)."""
+        try:
+            cache_path = self._get_cache_file_path()
+            state = {
+                'current_index': self.current_queue_index,
+                'queue_complete': self.queue_complete,
+                'saved_at': datetime.now().isoformat()
+            }
+            with open(cache_path, 'w') as f:
+                json.dump(state, f, indent=2)
+        except Exception as e:
+            self.logger.warning(f"Could not save queue state: {e}")
+
+    def _get_enabled_queue_messages(self):
+        """Get list of enabled messages in order."""
+        enabled = [msg for msg in self.message_queue if msg.get('enabled', True)]
+        # Sort by order if provided
+        try:
+            enabled.sort(key=lambda x: x.get('order', self.message_queue.index(x)))
+        except Exception:
+            pass
+        return enabled
+
+    def _load_current_message_settings(self):
+        """Load settings for the current queue message."""
+        enabled_messages = self._get_enabled_queue_messages()
+        
+        if not enabled_messages:
+            self.queue_complete = True
+            self.message = self.empty_queue_message
+            self.show_time = False
+            self.scroll_enabled = False
+            self.display_duration = 5
+            self.logger.warning("Queue is empty or all messages disabled")
+            return
+        
+        # Clamp index to valid range
+        if self.current_queue_index >= len(enabled_messages):
+            self.current_queue_index = len(enabled_messages) - 1
+            self.queue_complete = True
+        
+        current_msg = enabled_messages[self.current_queue_index]
+        
+        # Load message-specific settings with fallback to defaults
+        self.message = current_msg.get('message', 'Empty Message')
+        self.message_font_size = current_msg.get('message_font_size', self.message_font_size)
+        self.time_font_size = current_msg.get('time_font_size', self.time_font_size)
+        self.color = tuple(current_msg.get('color', self.color))
+        self.time_color = tuple(current_msg.get('time_color', self.time_color))
+        self.show_time = current_msg.get('show_time', self.show_time)
+        self.scroll_enabled = current_msg.get('scroll_enabled', self.scroll_enabled)
+        self.scroll_speed = float(current_msg.get('scroll_speed', self.scroll_speed))
+        self.scroll_delay = float(current_msg.get('scroll_delay', self.scroll_delay))
+        self.display_duration = current_msg.get('display_duration', self.display_duration)
+        
+        self.logger.debug(f"Loaded queue message {self.current_queue_index}: '{self.message[:30]}...'")
+
+    def _advance_queue(self):
+        """Move to next message in queue."""
+        enabled_messages = self._get_enabled_queue_messages()
+        if not enabled_messages:
+            self.queue_complete = True
+            return
+        
+        self.current_queue_index += 1
+        if self.current_queue_index >= len(enabled_messages):
+            self.queue_complete = True
+            self.logger.info("Queue complete, cycling back to start")
+            # Reset for looping
+            self.current_queue_index = 0
+            self.queue_complete = False
+        
+        self._load_current_message_settings()
+        self._save_queue_state()
+        self.message_change_pending = False
+        self.message_start_time = time.time()
+        self.text_image_cache = None  # Clear cache for new message
 
     def _load_font(self):
         """Load the font for text rendering (TTF or BDF) with multiple fallback strategies."""
@@ -231,6 +363,12 @@ class TrevorWorldPlugin(BasePlugin):
         try:
             self.last_update = time.time()
             
+            # Queue advancement logic
+            if self.queue_mode:
+                time_since_message_start = time.time() - self.message_start_time
+                if time_since_message_start > self.display_duration:
+                    self._advance_queue()
+            
             if self.show_time:
                 now = datetime.now()
                 new_time_str = now.strftime("%I:%M %p")
@@ -268,6 +406,7 @@ class TrevorWorldPlugin(BasePlugin):
         
         Displays the configured message and optionally the current time.
         Supports both scrolling and static display modes.
+        For queue mode, cycles through queued messages or shows empty message.
         """
         try:
             if force_clear:
@@ -275,6 +414,33 @@ class TrevorWorldPlugin(BasePlugin):
             
             width = self.display_manager.width
             height = self.display_manager.height
+            
+            # Handle queue completion
+            if self.queue_mode and self.queue_complete:
+                # Show empty queue message - static display
+                img = Image.new('RGB', (width, height), (0, 0, 0))
+                draw = ImageDraw.Draw(img)
+                
+                # Measure and draw empty message
+                try:
+                    bbox = draw.textbbox((0, 0), self.empty_queue_message, font=self.font)
+                    empty_width = bbox[2] - bbox[0]
+                    empty_height = bbox[3] - bbox[1]
+                except Exception:
+                    empty_width = len(self.empty_queue_message) * 8
+                    empty_height = 10
+                
+                msg_x = (width - empty_width) // 2
+                msg_y = (height - empty_height) // 2
+                
+                try:
+                    draw.text((msg_x, msg_y), self.empty_queue_message, font=self.font, fill=self.color)
+                except Exception as e:
+                    self.logger.error(f"Error drawing empty queue message: {e}")
+                
+                self.display_manager.image = img
+                self.display_manager.update_display()
+                return
             
             # Ensure font is loaded and dimensions are calculated
             if not self.font:
@@ -337,7 +503,24 @@ class TrevorWorldPlugin(BasePlugin):
         """Handle configuration changes at runtime."""
         super().on_config_change(new_config)
         
-        self.message = new_config.get('message', self.message)
+        # Handle queue configuration changes
+        if self.queue_mode:
+            new_queue = new_config.get('message_queue', self.message_queue)
+            if new_queue != self.message_queue:
+                self.message_queue = new_queue
+                self.current_queue_index = 0
+                self.queue_complete = False
+                self._load_current_message_settings()
+                self.text_image_cache = None
+                self.scroll_position = 0
+                self.message_start_time = time.time()
+                self.logger.info(f"Queue configuration updated, resetting to first message")
+            
+            self.empty_queue_message = new_config.get('empty_queue_message', self.empty_queue_message)
+        else:
+            # Single message mode
+            self.message = new_config.get('message', self.message)
+        
         self.show_time = new_config.get('show_time', self.show_time)
         self.color = tuple(new_config.get('color', self.color))
         self.time_color = tuple(new_config.get('time_color', self.time_color))
