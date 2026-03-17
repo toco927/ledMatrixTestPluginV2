@@ -165,6 +165,8 @@ class TrevorWorldPlugin(BasePlugin):
         """Save current queue state (for resuming after restart)."""
         try:
             cache_path = self._get_cache_file_path()
+            # Ensure parent directory exists
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
             state = {
                 'current_index': self.current_queue_index,
                 'queue_complete': self.queue_complete,
