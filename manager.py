@@ -550,12 +550,22 @@ class TrevorWorldPlugin(BasePlugin):
         if not super().validate_config():
             return False
         
-        # Validate message
-        if 'message' in self.config:
-            if not isinstance(self.config['message'], str):
-                self.logger.error("'message' must be a string")
+        # Validate queue_mode
+        if 'queue_mode' in self.config:
+            if not isinstance(self.config['queue_mode'], bool):
+                self.logger.error("'queue_mode' must be a boolean")
                 return False
-
+        
+        # Validate message (required for single message mode)
+        if not self.config.get('queue_mode', False):
+            if 'message' in self.config:
+                if not isinstance(self.config['message'], str):
+                    self.logger.error("'message' must be a string")
+                    return False
+                if not (1 <= len(self.config['message']) <= 50):
+                    self.logger.error("'message' must be between 1 and 50 characters")
+                    return False
+        
         # Validate colors
         for color_key in ['color', 'time_color']:
             if color_key in self.config:
@@ -606,6 +616,150 @@ class TrevorWorldPlugin(BasePlugin):
             except (ValueError, TypeError):
                 self.logger.error("'scroll_delay' must be a number")
                 return False
+        
+        if 'scroll_loop' in self.config:
+            if not isinstance(self.config['scroll_loop'], bool):
+                self.logger.error("'scroll_loop' must be a boolean")
+                return False
+        
+        if 'scroll_gap_width' in self.config:
+            try:
+                gap_width = float(self.config['scroll_gap_width'])
+                if gap_width < 0:
+                    self.logger.error("'scroll_gap_width' must be non-negative")
+                    return False
+            except (ValueError, TypeError):
+                self.logger.error("'scroll_gap_width' must be a number")
+                return False
+        
+        # Validate display_duration
+        if 'display_duration' in self.config:
+            try:
+                duration = float(self.config['display_duration'])
+                if not (1 <= duration <= 300):
+                    self.logger.error("'display_duration' must be between 1 and 300 seconds")
+                    return False
+            except (ValueError, TypeError):
+                self.logger.error("'display_duration' must be a number")
+                return False
+        
+        # Validate queue mode configuration
+        if self.config.get('queue_mode', False):
+            if 'message_queue' in self.config:
+                if not isinstance(self.config['message_queue'], list):
+                    self.logger.error("'message_queue' must be an array")
+                    return False
+                
+                if not self.config['message_queue']:
+                    self.logger.error("'message_queue' cannot be empty in queue_mode")
+                    return False
+                
+                # Validate each message in the queue
+                for idx, msg in enumerate(self.config['message_queue']):
+                    if not isinstance(msg, dict):
+                        self.logger.error(f"message_queue[{idx}] must be an object")
+                        return False
+                    
+                    # Required: message field
+                    if 'message' not in msg:
+                        self.logger.error(f"message_queue[{idx}]: 'message' is required")
+                        return False
+                    
+                    if not isinstance(msg['message'], str):
+                        self.logger.error(f"message_queue[{idx}]['message'] must be a string")
+                        return False
+                    
+                    if not (1 <= len(msg['message']) <= 100):
+                        self.logger.error(f"message_queue[{idx}]['message'] must be between 1 and 100 characters")
+                        return False
+                    
+                    # Validate optional fields
+                    if 'display_duration' in msg:
+                        try:
+                            dur = float(msg['display_duration'])
+                            if not (0.5 <= dur <= 300):
+                                self.logger.error(f"message_queue[{idx}]['display_duration'] must be between 0.5 and 300")
+                                return False
+                        except (ValueError, TypeError):
+                            self.logger.error(f"message_queue[{idx}]['display_duration'] must be a number")
+                            return False
+                    
+                    if 'order' in msg:
+                        if not isinstance(msg['order'], int) or msg['order'] < 0:
+                            self.logger.error(f"message_queue[{idx}]['order'] must be a non-negative integer")
+                            return False
+                    
+                    if 'enabled' in msg:
+                        if not isinstance(msg['enabled'], bool):
+                            self.logger.error(f"message_queue[{idx}]['enabled'] must be a boolean")
+                            return False
+                    
+                    # Validate optional color overrides
+                    for color_key in ['color', 'time_color']:
+                        if color_key in msg:
+                            color = msg[color_key]
+                            if not isinstance(color, (list, tuple)) or len(color) != 3:
+                                self.logger.error(f"message_queue[{idx}]['{color_key}'] must be an RGB array [R, G, B]")
+                                return False
+                            if not all(isinstance(c, int) and 0 <= c <= 255 for c in color):
+                                self.logger.error(f"message_queue[{idx}]['{color_key}'] values must be integers 0-255")
+                                return False
+                    
+                    # Validate optional boolean overrides
+                    for bool_key in ['show_time', 'scroll_enabled']:
+                        if bool_key in msg:
+                            if not isinstance(msg[bool_key], bool):
+                                self.logger.error(f"message_queue[{idx}]['{bool_key}'] must be a boolean")
+                                return False
+                    
+                    # Validate optional numeric overrides
+                    if 'scroll_speed' in msg:
+                        try:
+                            speed = float(msg['scroll_speed'])
+                            if not (0.1 <= speed <= 10):
+                                self.logger.warning(f"message_queue[{idx}]['scroll_speed'] {speed} is outside typical range 0.1-10")
+                        except (ValueError, TypeError):
+                            self.logger.error(f"message_queue[{idx}]['scroll_speed'] must be a number")
+                            return False
+                    
+                    if 'scroll_delay' in msg:
+                        try:
+                            delay = float(msg['scroll_delay'])
+                            if not (0.001 <= delay <= 0.1):
+                                self.logger.warning(f"message_queue[{idx}]['scroll_delay'] {delay} is outside typical range 0.001-0.1")
+                        except (ValueError, TypeError):
+                            self.logger.error(f"message_queue[{idx}]['scroll_delay'] must be a number")
+                            return False
+                    
+                    # Validate optional font size overrides
+                    for size_key in ['message_font_size', 'time_font_size']:
+                        if size_key in msg:
+                            if not isinstance(msg[size_key], int):
+                                self.logger.error(f"message_queue[{idx}]['{size_key}'] must be an integer")
+                                return False
+                            if not (1 <= msg[size_key] <= 100):
+                                self.logger.error(f"message_queue[{idx}]['{size_key}'] must be between 1 and 100")
+                                return False
+            else:
+                self.logger.error("'message_queue' is required when queue_mode is true")
+                return False
+            
+            # Validate optional queue settings
+            if 'empty_queue_message' in self.config:
+                if not isinstance(self.config['empty_queue_message'], str):
+                    self.logger.error("'empty_queue_message' must be a string")
+                    return False
+                if not (1 <= len(self.config['empty_queue_message']) <= 50):
+                    self.logger.error("'empty_queue_message' must be between 1 and 50 characters")
+                    return False
+            
+            if 'cache_file' in self.config:
+                if not isinstance(self.config['cache_file'], str):
+                    self.logger.error("'cache_file' must be a string")
+                    return False
+                if not self.config['cache_file']:
+                    self.logger.error("'cache_file' cannot be empty")
+                    return False
 
         self.logger.info("Configuration validated successfully")
         return True

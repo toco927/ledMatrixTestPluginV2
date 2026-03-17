@@ -1,7 +1,7 @@
 {
   "id": "trevor-world",
   "name": "Trevor's World",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "author": "toco927",
   "description": "A simple test plugin that displays a customizable message and font size. Testing purposes.",
   "entry_point": "manager.py",
@@ -20,7 +20,7 @@
   "versions": [
     {
       "released": "2026-03-16",
-      "version": "1.0.8",
+      "version": "1.0.9",
       "ledmatrix_min": "2.0.0"
     }
   ],
