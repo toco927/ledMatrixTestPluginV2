@@ -23,7 +23,7 @@
       "title": "Message Queue",
       "description": "Manage messages displayed on the LED matrix",
       "x-widget": "array-table",
-      "x-columns": ["enabled", "message", "display_duration", "order"],
+      "x-columns": ["enabled", "message", "display_duration", "order", "show_time"],
       "default": [],
       "items": {
         "type": "object",
@@ -42,7 +42,8 @@
           "enabled": {
             "type": "boolean",
             "title": "Enabled",
-            "default": true
+            "default": true,
+            "description": "Uncheck to disable this message in the queue"
           },
 
           "message": {

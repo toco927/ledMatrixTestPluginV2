@@ -93,6 +93,8 @@ class TrevorWorldPlugin(BasePlugin):
         self.logger.info(f"Trevor's World plugin initialized (queue_mode={self.queue_mode})")
         
         if self.queue_mode:
+            # Ensure all messages have explicit 'enabled' fields (fixes web UI persistence issue)
+            self._ensure_enabled_fields()
             self._load_queue_state()
             self._load_current_message_settings()
             self.logger.info(f"Queue mode enabled with {len(self.messages)} messages")
@@ -521,6 +523,8 @@ class TrevorWorldPlugin(BasePlugin):
             if new_messages != self.messages:
                 self.messages = new_messages
                 self.message_queue = new_messages  # Keep alias in sync
+                # Ensure all messages have explicit 'enabled' fields (fixes web UI persistence issue)
+                self._ensure_enabled_fields()
                 self.current_queue_index = 0
                 self.queue_complete = False
                 self._load_current_message_settings()
@@ -558,6 +562,20 @@ class TrevorWorldPlugin(BasePlugin):
         self.scroll_position = 0
         
         self.logger.info(f"Configuration updated: message='{self.message[:20]}...', scroll_enabled={self.scroll_enabled}")
+
+    def _ensure_enabled_fields(self):
+        """
+        Ensure all messages have an explicit 'enabled' field.
+        
+        This fixes a web UI issue where the 'enabled' checkbox state wasn't being persisted.
+        When a message is saved without an explicit 'enabled' field, we apply the schema default (true).
+        """
+        if self.queue_mode and self.messages:
+            for msg in self.messages:
+                # If 'enabled' field is missing, set it to the schema default (true)
+                if 'enabled' not in msg:
+                    msg['enabled'] = True
+                    self.logger.debug(f"Set missing 'enabled' field to true for message: '{msg.get('message', 'Unknown')[:30]}'")
 
     def validate_config(self):
         """Validate plugin configuration."""
@@ -699,83 +717,83 @@ class TrevorWorldPlugin(BasePlugin):
                     self.logger.error(f"messages[{idx}]['message'] must be between 1 and 100 characters")
                     return False
                     
-                    # Validate optional fields
-                    if 'display_duration' in msg:
+                # Validate optional fields
+                if 'display_duration' in msg:
+                    try:
+                        dur = float(msg['display_duration'])
+                        if not (0.5 <= dur <= 300):
+                            self.logger.error(f"messages[{idx}]['display_duration'] must be between 0.5 and 300")
+                            return False
+                    except (ValueError, TypeError):
+                        self.logger.error(f"messages[{idx}]['display_duration'] must be a number")
+                        return False
+                
+                if 'order' in msg:
+                    if not isinstance(msg['order'], int) or msg['order'] < 0:
+                        self.logger.error(f"messages[{idx}]['order'] must be a non-negative integer")
+                        return False
+                
+                if 'enabled' in msg:
+                    if not isinstance(msg['enabled'], bool):
+                        self.logger.error(f"messages[{idx}]['enabled'] must be a boolean")
+                        return False
+                
+                # Validate optional color overrides
+                for color_key in ['color', 'time_color']:
+                    if color_key in msg:
+                        color = msg[color_key]
+                        if not isinstance(color, (list, tuple)) or len(color) != 3:
+                            self.logger.error(f"messages[{idx}]['{color_key}'] must be an RGB array [R, G, B]")
+                            return False
+                        if not all(isinstance(c, int) and 0 <= c <= 255 for c in color):
+                            self.logger.error(f"messages[{idx}]['{color_key}'] values must be integers 0-255")
+                            return False
+                
+                # Validate optional boolean overrides
+                if 'show_time' in msg:
+                    if not isinstance(msg['show_time'], bool):
+                        self.logger.error(f"messages[{idx}]['show_time'] must be a boolean")
+                        return False
+                
+                # Validate optional font size overrides
+                for size_key in ['message_font_size', 'time_font_size']:
+                    if size_key in msg:
+                        if not isinstance(msg[size_key], int):
+                            self.logger.error(f"messages[{idx}]['{size_key}'] must be an integer")
+                            return False
+                        if not (1 <= msg[size_key] <= 100):
+                            self.logger.error(f"messages[{idx}]['{size_key}'] must be between 1 and 100")
+                            return False
+                
+                # Validate optional nested scroll override
+                if 'scroll' in msg:
+                    msg_scroll = msg['scroll']
+                    if not isinstance(msg_scroll, dict):
+                        self.logger.error(f"messages[{idx}]['scroll'] must be an object")
+                        return False
+                    
+                    if 'enabled' in msg_scroll:
+                        if not isinstance(msg_scroll['enabled'], bool):
+                            self.logger.error(f"messages[{idx}]['scroll']['enabled'] must be a boolean")
+                            return False
+                    
+                    if 'speed' in msg_scroll:
                         try:
-                            dur = float(msg['display_duration'])
-                            if not (0.5 <= dur <= 300):
-                                self.logger.error(f"messages[{idx}]['display_duration'] must be between 0.5 and 300")
-                                return False
+                            speed = float(msg_scroll['speed'])
+                            if not (0.1 <= speed <= 10):
+                                self.logger.warning(f"messages[{idx}]['scroll']['speed'] {speed} is outside typical range 0.1-10")
                         except (ValueError, TypeError):
-                            self.logger.error(f"messages[{idx}]['display_duration'] must be a number")
+                            self.logger.error(f"messages[{idx}]['scroll']['speed'] must be a number")
                             return False
                     
-                    if 'order' in msg:
-                        if not isinstance(msg['order'], int) or msg['order'] < 0:
-                            self.logger.error(f"messages[{idx}]['order'] must be a non-negative integer")
+                    if 'delay' in msg_scroll:
+                        try:
+                            delay = float(msg_scroll['delay'])
+                            if not (0.001 <= delay <= 0.1):
+                                self.logger.warning(f"messages[{idx}]['scroll']['delay'] {delay} is outside typical range 0.001-0.1")
+                        except (ValueError, TypeError):
+                            self.logger.error(f"messages[{idx}]['scroll']['delay'] must be a number")
                             return False
-                    
-                    if 'enabled' in msg:
-                        if not isinstance(msg['enabled'], bool):
-                            self.logger.error(f"messages[{idx}]['enabled'] must be a boolean")
-                            return False
-                    
-                    # Validate optional color overrides
-                    for color_key in ['color', 'time_color']:
-                        if color_key in msg:
-                            color = msg[color_key]
-                            if not isinstance(color, (list, tuple)) or len(color) != 3:
-                                self.logger.error(f"messages[{idx}]['{color_key}'] must be an RGB array [R, G, B]")
-                                return False
-                            if not all(isinstance(c, int) and 0 <= c <= 255 for c in color):
-                                self.logger.error(f"messages[{idx}]['{color_key}'] values must be integers 0-255")
-                                return False
-                    
-                    # Validate optional boolean overrides
-                    if 'show_time' in msg:
-                        if not isinstance(msg['show_time'], bool):
-                            self.logger.error(f"messages[{idx}]['show_time'] must be a boolean")
-                            return False
-                    
-                    # Validate optional font size overrides
-                    for size_key in ['message_font_size', 'time_font_size']:
-                        if size_key in msg:
-                            if not isinstance(msg[size_key], int):
-                                self.logger.error(f"messages[{idx}]['{size_key}'] must be an integer")
-                                return False
-                            if not (1 <= msg[size_key] <= 100):
-                                self.logger.error(f"messages[{idx}]['{size_key}'] must be between 1 and 100")
-                                return False
-                    
-                    # Validate optional nested scroll override
-                    if 'scroll' in msg:
-                        msg_scroll = msg['scroll']
-                        if not isinstance(msg_scroll, dict):
-                            self.logger.error(f"messages[{idx}]['scroll'] must be an object")
-                            return False
-                        
-                        if 'enabled' in msg_scroll:
-                            if not isinstance(msg_scroll['enabled'], bool):
-                                self.logger.error(f"messages[{idx}]['scroll']['enabled'] must be a boolean")
-                                return False
-                        
-                        if 'speed' in msg_scroll:
-                            try:
-                                speed = float(msg_scroll['speed'])
-                                if not (0.1 <= speed <= 10):
-                                    self.logger.warning(f"messages[{idx}]['scroll']['speed'] {speed} is outside typical range 0.1-10")
-                            except (ValueError, TypeError):
-                                self.logger.error(f"messages[{idx}]['scroll']['speed'] must be a number")
-                                return False
-                        
-                        if 'delay' in msg_scroll:
-                            try:
-                                delay = float(msg_scroll['delay'])
-                                if not (0.001 <= delay <= 0.1):
-                                    self.logger.warning(f"messages[{idx}]['scroll']['delay'] {delay} is outside typical range 0.001-0.1")
-                            except (ValueError, TypeError):
-                                self.logger.error(f"messages[{idx}]['scroll']['delay'] must be a number")
-                                return False
             
             # Validate optional queue settings
             if 'empty_queue_message' in self.config:

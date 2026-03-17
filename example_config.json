@@ -19,7 +19,7 @@
     "display_duration": 5,
     "empty_queue_message": "Queue Empty",
     "cache_file": ".trevor_world_queue_state",
-    "message_queue": [
+    "messages": [
       {
         "id": "msg_001",
         "order": 1,
