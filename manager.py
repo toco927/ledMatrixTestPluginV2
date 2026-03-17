@@ -33,6 +33,9 @@ class TrevorWorldPlugin(BasePlugin):
         self.show_time = config.get('show_time', True)
         self.color = tuple(config.get('color', [255, 255, 255]))
         self.time_color = tuple(config.get('time_color', [0, 255, 255]))
+        
+        self.message_size = config.get('message_size', 10)  # Font size for message
+        self.time_size = config.get('time_size', 8)  # Font size for time
 
         # Load the 6x9 BDF font
         self._load_font()
@@ -59,7 +62,7 @@ class TrevorWorldPlugin(BasePlugin):
                 manager_id=self.plugin_id,
                 element_key=f"{self.plugin_id}.message",
                 family="press_start",
-                size_px=10,
+                size_px=self.message_size,
                 color=self.color
             )
 
@@ -68,7 +71,7 @@ class TrevorWorldPlugin(BasePlugin):
                 manager_id=self.plugin_id,
                 element_key=f"{self.plugin_id}.time",
                 family="press_start",
-                size_px=8,
+                size_px=self.time_size,
                 color=self.time_color
             )
 
@@ -145,8 +148,8 @@ class TrevorWorldPlugin(BasePlugin):
             try:
                 if hasattr(self.plugin_manager, 'font_manager'):
                     font_manager = self.plugin_manager.font_manager
-                    message_font = font_manager.get_font(f"{self.plugin_id}.message")
-                    time_font = font_manager.get_font(f"{self.plugin_id}.time")
+                    message_font = font_manager.get_font(f"{self.plugin_id}.message", self.message_size)
+                    time_font = font_manager.get_font(f"{self.plugin_id}.time", self.time_size)
             except Exception as e:
                 self.logger.warning(f"Error getting fonts from font manager: {e}")
 
@@ -261,7 +264,25 @@ class TrevorWorldPlugin(BasePlugin):
             if not isinstance(self.config['show_time'], bool):
                 self.logger.error("'show_time' must be a boolean")
                 return False
-        
+
+        # Validate message_size
+        if 'message_size' in self.config:
+            if not isinstance(self.config['message_size'], int):
+                self.logger.error("'message_size' must be an integer")
+                return False
+            if not (1 <= self.config['message_size'] <= 100):
+                self.logger.error("'message_size' must be between 1 and 100")
+                return False
+
+        # Validate time_size
+        if 'time_size' in self.config:
+            if not isinstance(self.config['time_size'], int):
+                self.logger.error("'time_size' must be an integer")
+                return False
+            if not (1 <= self.config['time_size'] <= 100):
+                self.logger.error("'time_size' must be between 1 and 100")
+                return False
+
         self.logger.info("Configuration validated successfully")
         return True
     
@@ -273,6 +294,9 @@ class TrevorWorldPlugin(BasePlugin):
         info['message'] = self.message
         info['show_time'] = self.show_time
         info['last_update'] = self.last_update
+        info['current_time'] = self.current_time_str
+        info['message_size'] = self.message_size
+        info['time_size'] = self.time_size
         return info
     
     def cleanup(self):

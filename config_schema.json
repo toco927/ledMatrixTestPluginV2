@@ -16,10 +16,24 @@
       "maxLength": 50,
       "description": "The greeting message to display"
     },
+    "message_size": {
+      "type": "integer",
+      "default": 10,
+      "minimum": 1,
+      "maximum": 100,
+      "description": "Font size for the message text"
+    },
     "show_time": {
       "type": "boolean",
       "default": true,
       "description": "Show the current time below the message"
+    },
+    "time_size": {
+      "type": "integer",
+      "default": 8,
+      "minimum": 1,
+      "maximum": 100,
+      "description": "Font size for the time text"
     },
     "color": {
       "type": "array",
