@@ -3,7 +3,7 @@
   "type": "object",
   "title": "Trevor's World Plugin Configuration",
   "description": "Configuration schema for Trevor's World test plugin",
-  "properties": {
+  "properties": {    
     "enabled": {
       "type": "boolean",
       "default": true,
@@ -71,6 +71,37 @@
       "minimum": 1,
       "maximum": 300,
       "description": "How long to display in seconds"
+    },
+    "scroll_enabled": {
+      "type": "boolean",
+      "title": "Enable Scrolling",
+      "description": "If true, the message will scroll if it is too wide for the display.",
+      "default": false
+    },
+     "scroll_speed": {
+      "type": "number",
+      "default": 1,
+      "minimum": 0.1,
+      "maximum": 10,
+      "description": "Scroll speed in pixels per frame. Higher values = faster scrolling. Typical range: 1-2 pixels/frame for smooth scrolling. Works with scroll_delay to control actual speed."
+    },
+    "scroll_delay": {
+      "type": "number",
+      "default": 0.01,
+      "minimum": 0.001,
+      "maximum": 0.1,
+      "description": "Delay in seconds per frame. Lower values = higher FPS = smoother scrolling. Default 0.01 = 100 FPS. For 120 FPS use 0.0083, for 240 FPS use 0.0042."
+    },
+    "scroll_loop": {
+      "type": "boolean",
+      "default": true,
+      "description": "If true, text loops continuously. If false, scrolls once and stops (one-shot mode)."
+    },
+    "scroll_gap_width": {
+      "type": "number",
+      "default": 32,
+      "minimum": 0,
+      "description": "Gap width in pixels between scroll loops (space between end and start of text when looping)"
     }
   },
   "required": ["enabled"],

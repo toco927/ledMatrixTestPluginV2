@@ -9,6 +9,10 @@ from src.plugin_system.base_plugin import BasePlugin
 import time
 from datetime import datetime
 import os
+from pathlib import Path
+
+# --- Scrolling and caching additions ---
+from PIL import Image, ImageDraw, ImageFont
 
 try:
     import freetype
@@ -38,12 +42,30 @@ class TrevorWorldPlugin(BasePlugin):
         self.message_font_size = config.get('message_font_size', 10)  # Font size for message
         self.time_font_size = config.get('time_font_size', 8)  # Font size for time
 
-        # Load the 6x9 BDF font
-        self._load_font()
+        # Scrolling config
+        self.scroll_enabled = config.get('scroll_enabled', False)
+        self.scroll_speed = float(config.get('scroll_speed', 1))  # pixels per frame
+        self.scroll_delay = float(config.get('scroll_delay', 0.01))  # seconds per frame
+        self.scroll_loop = config.get('scroll_loop', True)
+        self.scroll_gap_width = config.get('scroll_gap_width', 32)
+
+        # Font/image cache
+        self.font = None
+        self.message_width = 0
+        self.message_height = 0
+        self.time_width = 0
+        self.time_height = 0
+        self.text_image_cache = None
+        self.scroll_position = 0
+        self.last_scroll_time = time.time()
 
         # State
         self.last_update = None
         self.current_time_str = ""
+
+        # Load font and calculate dimensions
+        self._load_font()
+        self._calculate_text_dimensions()
 
         self.logger.info(f"Trevor's World plugin initialized with message: '{self.message}'")
 
@@ -51,12 +73,16 @@ class TrevorWorldPlugin(BasePlugin):
         self._register_fonts()
 
     def _register_fonts(self):
-        """Register fonts with the font manager."""
+        """Register fonts with the font manager if available."""
         try:
             if not hasattr(self.plugin_manager, 'font_manager'):
+                self.logger.debug("Font manager not available, skipping font registration")
                 return
 
             font_manager = self.plugin_manager.font_manager
+            if not font_manager:
+                self.logger.debug("Font manager is None, skipping font registration")
+                return
 
             # Message font
             font_manager.register_manager_font(
@@ -76,37 +102,132 @@ class TrevorWorldPlugin(BasePlugin):
                 color=self.time_color
             )
 
-            self.logger.info("Trevor's World fonts registered")
+            self.logger.info("Trevor's World fonts registered successfully")
+        except AttributeError as e:
+            self.logger.debug(f"Font manager registration skipped: {e}")
         except Exception as e:
             self.logger.warning(f"Error registering fonts: {e}")
 
     def _load_font(self):
-        """Load the 6x9 BDF font for text rendering."""
-        if freetype is None:
-            self.logger.warning("freetype not available, font rendering disabled")
-            self.bdf_font = None
-            return
-
-        try:
-            font_path = "assets/fonts/6x9.bdf"
-            if not os.path.exists(font_path):
-                self.logger.error(f"Font file not found: {font_path}")
-                self.bdf_font = None
+        """Load the font for text rendering (TTF or BDF) with multiple fallback strategies."""
+        font_path = self.config.get('font_path', 'assets/fonts/PressStart2P-Regular.ttf')
+        font_size = self.message_font_size
+        
+        # Resolve relative paths to project root
+        if not os.path.isabs(font_path):
+            resolved_path = None
+            
+            # Strategy 1: Try as-is (if running from project root)
+            if os.path.exists(font_path):
+                resolved_path = font_path
+            else:
+                # Strategy 2: Try relative to current working directory (project root)
+                cwd_path = os.path.join(os.getcwd(), font_path)
+                if os.path.exists(cwd_path):
+                    resolved_path = cwd_path
+                else:
+                    # Strategy 3: Try relative to plugin directory's parent (project root)
+                    plugin_dir = Path(__file__).parent
+                    project_root = plugin_dir.parent.parent
+                    project_path = project_root / font_path
+                    if project_path.exists():
+                        resolved_path = str(project_path)
+            
+            if resolved_path:
+                font_path = resolved_path
+            else:
+                self.logger.warning(f"Font file not found: {font_path}, using default")
+                self.font = ImageFont.load_default()
                 return
-
-            self.bdf_font = freetype.Face(font_path)
-            self.logger.info(f"6x9 BDF font loaded successfully from {font_path}")
+        
+        if not os.path.exists(font_path):
+            self.logger.warning(f"Font file not found: {font_path}, using default")
+            self.font = ImageFont.load_default()
+            return
+        
+        try:
+            if font_path.lower().endswith('.ttf'):
+                self.font = ImageFont.truetype(font_path, font_size)
+                self.logger.info(f"Loaded TTF font: {font_path} at size {font_size}")
+            elif font_path.lower().endswith('.bdf'):
+                # BDF fonts need freetype
+                if freetype is not None:
+                    self.font = freetype.Face(font_path)
+                    self.font.set_pixel_sizes(0, font_size)
+                    self.logger.info(f"Loaded BDF font: {font_path} at size {font_size}")
+                else:
+                    self.logger.warning("freetype not available for BDF font, using default")
+                    self.font = ImageFont.load_default()
+            else:
+                self.logger.warning(f"Unsupported font type: {font_path}, using default")
+                self.font = ImageFont.load_default()
         except Exception as e:
-            self.logger.error(f"Failed to load 6x9 BDF font: {e}")
-            self.bdf_font = None
+            self.logger.error(f"Failed to load font {font_path}: {e}")
+            self.font = ImageFont.load_default()
+
+    def _calculate_text_dimensions(self):
+        """Calculate message and time text width/height for centering and scrolling."""
+        if not self.font:
+            # Use fallback dimensions if font not loaded
+            self.message_width = len(self.message) * 8
+            self.message_height = 10
+            self.time_width = len(self.current_time_str) * 8 if self.current_time_str else 0
+            self.time_height = 10
+            return
+        
+        try:
+            temp_img = Image.new('RGB', (1, 1))
+            temp_draw = ImageDraw.Draw(temp_img)
+            
+            # Calculate message dimensions
+            if isinstance(self.font, ImageFont.FreeTypeFont) or isinstance(self.font, ImageFont.ImageFont):
+                bbox = temp_draw.textbbox((0, 0), self.message, font=self.font)
+                self.message_width = bbox[2] - bbox[0]
+                self.message_height = bbox[3] - bbox[1]
+            else:
+                # Default fallback for other font types
+                self.message_width = len(self.message) * 8
+                self.message_height = 10
+            
+            # Calculate time dimensions if we have a time string
+            if self.current_time_str:
+                try:
+                    bbox_time = temp_draw.textbbox((0, 0), self.current_time_str, font=self.font)
+                    self.time_width = bbox_time[2] - bbox_time[0]
+                    self.time_height = bbox_time[3] - bbox_time[1]
+                except Exception:
+                    self.time_width = len(self.current_time_str) * 8
+                    self.time_height = 10
+            else:
+                self.time_width = 0
+                self.time_height = 0
+        except Exception as e:
+            self.logger.warning(f"Could not calculate text dimensions: {e}")
+            self.message_width = len(self.message) * 8
+            self.message_height = 10
+            self.time_width = len(self.current_time_str) * 8 if self.current_time_str else 0
+            self.time_height = 10
+
+    def _create_text_cache(self):
+        """Pre-render the message for scrolling."""
+        if not self.message or self.message_width == 0 or not self.font:
+            self.logger.warning("Cannot create text cache: message is empty, text_width is 0, or font not loaded")
+            return
+        try:
+            width = self.display_manager.width
+            height = self.display_manager.height
+            cache_width = width + self.message_width + width + self.scroll_gap_width
+            self.text_image_cache = Image.new('RGB', (cache_width, height), (0, 0, 0))
+            draw = ImageDraw.Draw(self.text_image_cache)
+            y_pos = (height - self.message_height) // 2
+            draw.text((width, y_pos), self.message, font=self.font, fill=self.color)
+            self.logger.info(f"Created text cache: {cache_width}x{height} (text: {self.message_width}px)")
+        except Exception as e:
+            self.logger.error(f"Failed to create text cache: {e}")
+            self.text_image_cache = None
 
     def update(self):
-        """
-        Update plugin data.
-        
-        For this simple plugin, we just update the current time string.
-        In a real plugin, this would fetch data from APIs, databases, etc.
-        """
+        """Update plugin data and scroll position if scrolling is enabled."""
         try:
             self.last_update = time.time()
             
@@ -117,172 +238,130 @@ class TrevorWorldPlugin(BasePlugin):
                 # Only log if the time actually changed (reduces spam from sub-minute updates)
                 if new_time_str != self.current_time_str:
                     self.current_time_str = new_time_str
+                    self._calculate_text_dimensions()  # Recalculate time dimensions
                     # Only log time changes occasionally
                     if not hasattr(self, '_last_time_log') or time.time() - self._last_time_log > 60:
                         self.logger.info(f"Time updated: {self.current_time_str}")
                         self._last_time_log = time.time()
-                else:
-                    self.current_time_str = new_time_str
+            
+            # Scrolling update
+            if self.scroll_enabled and self.message_width > self.display_manager.width:
+                now = time.time()
+                if now - self.last_scroll_time >= self.scroll_delay:
+                    self.scroll_position += self.scroll_speed
+                    cache_width = self.display_manager.width + self.message_width + self.display_manager.width + self.scroll_gap_width
+                    if self.scroll_position > cache_width - self.display_manager.width:
+                        if self.scroll_loop:
+                            self.scroll_position = 0
+                        else:
+                            self.scroll_position = cache_width - self.display_manager.width
+                    self.last_scroll_time = now
+            else:
+                self.scroll_position = 0
                 
         except Exception as e:
             self.logger.error(f"Error during update: {e}", exc_info=True)
-    
+                    
     def display(self, force_clear=False):
         """
         Render the plugin display.
         
         Displays the configured message and optionally the current time.
+        Supports both scrolling and static display modes.
         """
         try:
-            # Clear display if requested
             if force_clear:
                 self.display_manager.clear()
             
-            # Get display dimensions
             width = self.display_manager.width
             height = self.display_manager.height
             
-            # Get fonts from font manager
-            message_font = None
-            time_font = None
-
-            try:
-                if hasattr(self.plugin_manager, 'font_manager'):
-                    
-                    font_manager = self.plugin_manager.font_manager
-                    
-                    message_font = font_manager.resolve_font(
-                        element_key=f"{self.plugin_id}.message",
-                        family=self.font_family,
-                        size_px=self.message_font_size
-                    )
-
-                    time_font = font_manager.resolve_font(
-                        element_key=f"{self.plugin_id}.time",
-                        family=self.font_family,
-                        size_px=self.time_font_size
-                    )
-                    
-                    # message_font = font_manager.get_font(f"{self.plugin_id}.message", self.message_font_size)
-                    # time_font = font_manager.get_font(f"{self.plugin_id}.time", self.time_font_size)
-            except Exception as e:
-                self.logger.warning(f"Error getting fonts from font manager: {e}")
-
-            # Calculate positions for centered text
-            # --- Centering logic ---
-            def get_text_size(text, font=None, font_fallback=None):
-                # Try to use display_manager's get_text_width and get_font_height if available
-                try:
-                    if font and hasattr(self.display_manager, 'get_text_width') and hasattr(self.display_manager, 'get_font_height'):
-                        w = self.display_manager.get_text_width(text, font=font)
-                        h = self.display_manager.get_font_height(font=font)
-                        return w, h
-                except Exception:
-                    pass
-                # Fallback: use BDF font if available
-                try:
-                    if font_fallback and hasattr(self.display_manager, 'get_text_width') and hasattr(self.display_manager, 'get_font_height'):
-                        w = self.display_manager.get_text_width(text, font=font_fallback)
-                        h = self.display_manager.get_font_height(font=font_fallback)
-                        return w, h
-                except Exception:
-                    pass
-                # Last resort: estimate
-                return len(text) * 6, 9  # crude guess
-
-            if self.show_time:
-                # --- Center message horizontally, time at bottom ---
-                # Message
-                msg_w, msg_h = get_text_size(self.message, font=message_font, font_fallback=self.bdf_font)
-                msg_x = (width - msg_w) // 2
-                msg_y = (height // 2) - (msg_h // 2)
-
-                # Time
-                time_w, time_h = get_text_size(self.current_time_str, font=time_font, font_fallback=self.bdf_font)
-                time_x = (width - time_w) // 2
-                time_y = height - time_h  # bottom of display
-
-                # Draw the greeting message
-                if message_font:
-                    self.display_manager.draw_text(
-                        self.message,
-                        x=msg_x,
-                        y=msg_y,
-                        font=message_font
-                    )
-                else:
-                    self.display_manager.draw_text(
-                        self.message,
-                        x=msg_x,
-                        y=msg_y,
-                        color=self.color,
-                        font=self.bdf_font
-                    )
-
-                # Draw the current time
-                if self.current_time_str:
-                    if time_font:
-                        self.display_manager.draw_text(
-                            self.current_time_str,
-                            x=time_x,
-                            y=time_y,
-                            font=time_font
-                        )
-                    else:
-                        self.display_manager.draw_text(
-                            self.current_time_str,
-                            x=time_x,
-                            y=time_y,
-                            color=self.time_color,
-                            font=self.bdf_font
-                        )
-            else:
-                # Center message both horizontally and vertically
-                msg_w, msg_h = get_text_size(self.message, font=message_font, font_fallback=self.bdf_font)
-                msg_x = (width - msg_w) // 2
-                msg_y = (height - msg_h) // 2
-                if message_font:
-                    self.display_manager.draw_text(
-                        self.message,
-                        x=msg_x,
-                        y=msg_y,
-                        font=message_font
-                    )
-                else:
-                    self.display_manager.draw_text(
-                        self.message,
-                        x=msg_x,
-                        y=msg_y,
-                        color=self.color,
-                        font=self.bdf_font
-                    )
+            # Ensure font is loaded and dimensions are calculated
+            if not self.font:
+                self.logger.error("Font not loaded, cannot display")
+                return
             
-            # Update the physical display
-            self.display_manager.update_display()
+            if self.message_width == 0 or self.message_height == 0:
+                self._calculate_text_dimensions()
+            
+            # --- Scrolling logic ---
+            if self.scroll_enabled and self.message_width > width:
+                if not self.text_image_cache:
+                    self._create_text_cache()
+                if self.text_image_cache:
+                    # Get visible portion
+                    x_offset = int(self.scroll_position)
+                    visible = self.text_image_cache.crop((x_offset, 0, x_offset + width, height))
+                    # Paste to display_manager.image if available, else fallback
+                    if hasattr(self.display_manager, 'image') and self.display_manager.image is not None:
+                        self.display_manager.image.paste(visible, (0, 0))
+                    else:
+                        # Fallback: draw directly
+                        img = Image.new('RGB', (width, height), (0, 0, 0))
+                        img.paste(visible, (0, 0))
+                        self.display_manager.image = img
+                    self.display_manager.update_display()
+                else:
+                    self.logger.warning("Text image cache not available for scrolling")
+            else:
+                # Centered message and time (static display)
+                img = Image.new('RGB', (width, height), (0, 0, 0))
+                draw = ImageDraw.Draw(img)
+                
+                # Draw message centered horizontally, in upper-middle area
+                msg_x = (width - self.message_width) // 2
+                msg_y = (height // 2) - (self.message_height // 2)
+                
+                # Use loaded font for drawing
+                try:
+                    draw.text((msg_x, msg_y), self.message, font=self.font, fill=self.color)
+                except Exception as e:
+                    self.logger.error(f"Error drawing message: {e}")
+                
+                # Draw time at bottom if enabled
+                if self.show_time and self.current_time_str and self.time_width > 0 and self.time_height > 0:
+                    time_x = (width - self.time_width) // 2
+                    time_y = height - self.time_height
+                    try:
+                        draw.text((time_x, time_y), self.current_time_str, font=self.font, fill=self.time_color)
+                    except Exception as e:
+                        self.logger.error(f"Error drawing time: {e}")
+                
+                self.display_manager.image = img
+                self.display_manager.update_display()
                 
         except Exception as e:
             self.logger.error(f"Error during display: {e}", exc_info=True)
-            # Show error message on display
-            try:
-                self.display_manager.clear()
-                self.display_manager.draw_text(
-                    "Error!",
-                    x=width // 2,
-                    y=height // 2,
-                    color=(255, 0, 0),
-                    font=self.bdf_font
-                )
-                self.display_manager.update_display()
-            except:
-                pass  # If we can't even show error, just log it
     
-    def validate_config(self):
-        """
-        Validate plugin configuration.
+    def on_config_change(self, new_config):
+        """Handle configuration changes at runtime."""
+        super().on_config_change(new_config)
         
-        Ensures the configuration values are valid.
-        """
-        # Call parent validation
+        self.message = new_config.get('message', self.message)
+        self.show_time = new_config.get('show_time', self.show_time)
+        self.color = tuple(new_config.get('color', self.color))
+        self.time_color = tuple(new_config.get('time_color', self.time_color))
+        self.font_family = new_config.get('font_family', self.font_family)
+        self.message_font_size = new_config.get('message_font_size', self.message_font_size)
+        self.time_font_size = new_config.get('time_font_size', self.time_font_size)
+        self.scroll_enabled = new_config.get('scroll_enabled', self.scroll_enabled)
+        self.scroll_speed = float(new_config.get('scroll_speed', self.scroll_speed))
+        self.scroll_delay = float(new_config.get('scroll_delay', self.scroll_delay))
+        self.scroll_loop = new_config.get('scroll_loop', self.scroll_loop)
+        self.scroll_gap_width = new_config.get('scroll_gap_width', self.scroll_gap_width)
+        
+        # Reload font and recalculate dimensions
+        self._load_font()
+        self._calculate_text_dimensions()
+        
+        # Reset scrolling state
+        self.text_image_cache = None
+        self.scroll_position = 0
+        
+        self.logger.info(f"Configuration updated: message='{self.message[:20]}...', scroll_enabled={self.scroll_enabled}")
+
+    def validate_config(self):
+        """Validate plugin configuration."""
         if not super().validate_config():
             return False
         
@@ -290,13 +369,6 @@ class TrevorWorldPlugin(BasePlugin):
         if 'message' in self.config:
             if not isinstance(self.config['message'], str):
                 self.logger.error("'message' must be a string")
-                return False
-            if len(self.config['message']) > 50:
-                self.logger.warning("'message' is very long, may not fit on display")
-
-        if 'font_family' in self.config:
-            if self.config['font_family'] not in ['press_start', 'four_by_six', 'tom_thumb', 'tiny', 'picopixel']:
-                self.logger.error("'font_family' must be one of the predefined font families")
                 return False
 
         # Validate colors
@@ -316,44 +388,92 @@ class TrevorWorldPlugin(BasePlugin):
                 self.logger.error("'show_time' must be a boolean")
                 return False
 
-        # Validate message_font_size
-        if 'message_font_size' in self.config:
-            if not isinstance(self.config['message_font_size'], int):
-                self.logger.error("'message_font_size' must be an integer")
-                return False
-            if not (1 <= self.config['message_font_size'] <= 100):
-                self.logger.error("'message_font_size' must be between 1 and 100")
-                return False
+        # Validate font sizes
+        for size_key in ['message_font_size', 'time_font_size']:
+            if size_key in self.config:
+                if not isinstance(self.config[size_key], int):
+                    self.logger.error(f"'{size_key}' must be an integer")
+                    return False
+                if not (1 <= self.config[size_key] <= 100):
+                    self.logger.error(f"'{size_key}' must be between 1 and 100")
+                    return False
 
-        # Validate time_font_size
-        if 'time_font_size' in self.config:
-            if not isinstance(self.config['time_font_size'], int):
-                self.logger.error("'time_font_size' must be an integer")
+        # Validate scroll settings
+        if 'scroll_enabled' in self.config:
+            if not isinstance(self.config['scroll_enabled'], bool):
+                self.logger.error("'scroll_enabled' must be a boolean")
                 return False
-            if not (1 <= self.config['time_font_size'] <= 100):
-                self.logger.error("'time_font_size' must be between 1 and 100")
+        
+        if 'scroll_speed' in self.config:
+            try:
+                scroll_speed = float(self.config['scroll_speed'])
+                if not (0.1 <= scroll_speed <= 10):
+                    self.logger.warning(f"'scroll_speed' {scroll_speed} is outside typical range 0.1-10")
+            except (ValueError, TypeError):
+                self.logger.error("'scroll_speed' must be a number")
+                return False
+        
+        if 'scroll_delay' in self.config:
+            try:
+                scroll_delay = float(self.config['scroll_delay'])
+                if not (0.001 <= scroll_delay <= 0.1):
+                    self.logger.warning(f"'scroll_delay' {scroll_delay} is outside typical range 0.001-0.1")
+            except (ValueError, TypeError):
+                self.logger.error("'scroll_delay' must be a number")
                 return False
 
         self.logger.info("Configuration validated successfully")
         return True
     
+    def get_display_duration(self):
+        """Get display duration from config or calculate based on scroll settings."""
+        # If scrolling is enabled and message is wider than display, calculate duration
+        if self.scroll_enabled and self.message_width > self.display_manager.width:
+            # Calculate time needed for text to scroll across
+            # cache_width = display_width + message_width + display_width + gap
+            cache_width = self.display_manager.width + self.message_width + self.display_manager.width + self.scroll_gap_width
+            # frames_needed = cache_width / scroll_speed
+            # time_needed = frames_needed * scroll_delay
+            if self.scroll_speed > 0 and self.scroll_delay > 0:
+                frames_needed = cache_width / self.scroll_speed
+                duration = frames_needed * self.scroll_delay
+                # Add buffer for looping (if enabled)
+                if self.scroll_loop:
+                    duration += 1.0  # 1 second buffer between loops
+                return max(duration, 5.0)  # Minimum 5 seconds
+        
+        # Default display duration from config
+        return self.config.get('display_duration', 10.0)
+    
     def get_info(self):
-        """
-        Return plugin information for web UI.
-        """
+        """Return plugin information for web UI."""
         info = super().get_info()
-        info['message'] = self.message
-        info['show_time'] = self.show_time
-        info['last_update'] = self.last_update
-        info['current_time'] = self.current_time_str
-        info['message_font_size'] = self.message_font_size
-        info['time_font_size'] = self.time_font_size
+        # Calculate pixels per second for display
+        pixels_per_second = self.scroll_speed / self.scroll_delay if self.scroll_delay > 0 else self.scroll_speed * 100
+        info.update({
+            'message': self.message[:50] if len(self.message) > 50 else self.message,
+            'message_width': self.message_width,
+            'message_height': self.message_height,
+            'show_time': self.show_time,
+            'current_time': self.current_time_str,
+            'time_width': self.time_width,
+            'time_height': self.time_height,
+            'scroll_enabled': self.scroll_enabled,
+            'scroll_speed': self.scroll_speed,  # pixels per frame
+            'scroll_delay': self.scroll_delay,  # seconds per frame
+            'scroll_loop': self.scroll_loop,
+            'scroll_gap_width': self.scroll_gap_width,
+            'pixels_per_second': round(pixels_per_second, 1),  # calculated from frame-based settings
+            'display_duration': self.get_display_duration(),
+            'last_update': self.last_update,
+            'font_size_message': self.message_font_size,
+            'font_size_time': self.time_font_size
+        })
         return info
     
     def cleanup(self):
-        """
-        Cleanup resources when plugin is unloaded.
-        """
+        """Cleanup resources when plugin is unloaded."""
+        self.text_image_cache = None  # Clear image cache to free memory
         self.logger.info("Cleaning up Trevor's World plugin")
         super().cleanup()
 
