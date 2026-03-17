@@ -9,11 +9,13 @@
     "time_font_size": 8,
     "color": [255, 255, 255],
     "time_color": [0, 255, 255],
-    "scroll_enabled": false,
-    "scroll_speed": 1,
-    "scroll_delay": 0.01,
-    "scroll_loop": true,
-    "scroll_gap_width": 32,
+    "scroll": {
+      "enabled": false,
+      "speed": 1,
+      "delay": 0.01,
+      "loop": true,
+      "gap_width": 32
+    },
     "display_duration": 5,
     "empty_queue_message": "Queue Empty",
     "cache_file": ".trevor_world_queue_state",
@@ -26,11 +28,13 @@
         "color": [255, 255, 255],
         "time_color": [0, 255, 255],
         "show_time": true,
-        "scroll_enabled": false,
-        "scroll_speed": 1,
-        "scroll_delay": 0.01,
         "message_font_size": 10,
         "time_font_size": 8,
+        "scroll": {
+          "enabled": false,
+          "speed": 1,
+          "delay": 0.01
+        },
         "enabled": true
       },
       {
@@ -41,11 +45,13 @@
         "color": [0, 255, 0],
         "time_color": [0, 255, 255],
         "show_time": false,
-        "scroll_enabled": true,
-        "scroll_speed": 0.5,
-        "scroll_delay": 0.02,
         "message_font_size": 8,
         "time_font_size": 8,
+        "scroll": {
+          "enabled": true,
+          "speed": 0.5,
+          "delay": 0.02
+        },
         "enabled": true
       },
       {
@@ -56,14 +62,15 @@
         "color": [255, 128, 0],
         "time_color": [128, 255, 0],
         "show_time": true,
-        "scroll_enabled": true,
-        "scroll_speed": 0.7,
-        "scroll_delay": 0.015,
         "message_font_size": 9,
         "time_font_size": 7,
+        "scroll": {
+          "enabled": true,
+          "speed": 0.7,
+          "delay": 0.015
+        },
         "enabled": true
       }
     ]
   }
 }
-

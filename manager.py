@@ -53,11 +53,15 @@ class TrevorWorldPlugin(BasePlugin):
         self.time_font_size = config.get('time_font_size', 8)
         self.color = tuple(config.get('color', [255, 255, 255]))
         self.time_color = tuple(config.get('time_color', [0, 255, 255]))
-        self.scroll_enabled = config.get('scroll_enabled', False)
-        self.scroll_speed = float(config.get('scroll_speed', 1))
-        self.scroll_delay = float(config.get('scroll_delay', 0.01))
-        self.scroll_loop = config.get('scroll_loop', True)
-        self.scroll_gap_width = config.get('scroll_gap_width', 32)
+        
+        # Handle scroll configuration - support both nested object and flat properties
+        scroll_config = config.get('scroll', {})
+        self.scroll_enabled = scroll_config.get('enabled', config.get('scroll_enabled', False))
+        self.scroll_speed = float(scroll_config.get('speed', config.get('scroll_speed', 1)))
+        self.scroll_delay = float(scroll_config.get('delay', config.get('scroll_delay', 0.01)))
+        self.scroll_loop = scroll_config.get('loop', config.get('scroll_loop', True))
+        self.scroll_gap_width = scroll_config.get('gap_width', config.get('scroll_gap_width', 32))
+        
         self.display_duration = config.get('display_duration', 5)
         
         # Single message mode (non-queue)
@@ -214,9 +218,13 @@ class TrevorWorldPlugin(BasePlugin):
         self.color = tuple(current_msg.get('color', self.color))
         self.time_color = tuple(current_msg.get('time_color', self.time_color))
         self.show_time = current_msg.get('show_time', self.show_time)
-        self.scroll_enabled = current_msg.get('scroll_enabled', self.scroll_enabled)
-        self.scroll_speed = float(current_msg.get('scroll_speed', self.scroll_speed))
-        self.scroll_delay = float(current_msg.get('scroll_delay', self.scroll_delay))
+        
+        # Handle scroll configuration - support both nested object and flat properties
+        msg_scroll = current_msg.get('scroll', {})
+        self.scroll_enabled = msg_scroll.get('enabled', current_msg.get('scroll_enabled', self.scroll_enabled))
+        self.scroll_speed = float(msg_scroll.get('speed', current_msg.get('scroll_speed', self.scroll_speed)))
+        self.scroll_delay = float(msg_scroll.get('delay', current_msg.get('scroll_delay', self.scroll_delay)))
+        
         self.display_duration = current_msg.get('display_duration', self.display_duration)
         
         self.logger.debug(f"Loaded queue message {self.current_queue_index}: '{self.message[:30]}...'")
@@ -529,11 +537,14 @@ class TrevorWorldPlugin(BasePlugin):
         self.font_family = new_config.get('font_family', self.font_family)
         self.message_font_size = new_config.get('message_font_size', self.message_font_size)
         self.time_font_size = new_config.get('time_font_size', self.time_font_size)
-        self.scroll_enabled = new_config.get('scroll_enabled', self.scroll_enabled)
-        self.scroll_speed = float(new_config.get('scroll_speed', self.scroll_speed))
-        self.scroll_delay = float(new_config.get('scroll_delay', self.scroll_delay))
-        self.scroll_loop = new_config.get('scroll_loop', self.scroll_loop)
-        self.scroll_gap_width = new_config.get('scroll_gap_width', self.scroll_gap_width)
+        
+        # Handle scroll configuration - support both nested object and flat properties
+        scroll_config = new_config.get('scroll', {})
+        self.scroll_enabled = scroll_config.get('enabled', new_config.get('scroll_enabled', self.scroll_enabled))
+        self.scroll_speed = float(scroll_config.get('speed', new_config.get('scroll_speed', self.scroll_speed)))
+        self.scroll_delay = float(scroll_config.get('delay', new_config.get('scroll_delay', self.scroll_delay)))
+        self.scroll_loop = scroll_config.get('loop', new_config.get('scroll_loop', self.scroll_loop))
+        self.scroll_gap_width = scroll_config.get('gap_width', new_config.get('scroll_gap_width', self.scroll_gap_width))
         
         # Reload font and recalculate dimensions
         self._load_font()
@@ -556,15 +567,19 @@ class TrevorWorldPlugin(BasePlugin):
                 self.logger.error("'queue_mode' must be a boolean")
                 return False
         
-        # Validate message (required for single message mode)
-        if not self.config.get('queue_mode', False):
-            if 'message' in self.config:
-                if not isinstance(self.config['message'], str):
-                    self.logger.error("'message' must be a string")
-                    return False
-                if not (1 <= len(self.config['message']) <= 50):
-                    self.logger.error("'message' must be between 1 and 50 characters")
-                    return False
+        queue_mode = self.config.get('queue_mode', False)
+        
+        # Validate message (required for single message mode, optional for queue mode)
+        if 'message' in self.config:
+            if not isinstance(self.config['message'], str):
+                self.logger.error("'message' must be a string")
+                return False
+            if not (1 <= len(self.config['message']) <= 50):
+                self.logger.error("'message' must be between 1 and 50 characters")
+                return False
+        elif not queue_mode:
+            self.logger.error("'message' is required when queue_mode is false")
+            return False
         
         # Validate colors
         for color_key in ['color', 'time_color']:
@@ -592,45 +607,51 @@ class TrevorWorldPlugin(BasePlugin):
                 if not (1 <= self.config[size_key] <= 100):
                     self.logger.error(f"'{size_key}' must be between 1 and 100")
                     return False
-
-        # Validate scroll settings
-        if 'scroll_enabled' in self.config:
-            if not isinstance(self.config['scroll_enabled'], bool):
-                self.logger.error("'scroll_enabled' must be a boolean")
-                return False
         
-        if 'scroll_speed' in self.config:
-            try:
-                scroll_speed = float(self.config['scroll_speed'])
-                if not (0.1 <= scroll_speed <= 10):
-                    self.logger.warning(f"'scroll_speed' {scroll_speed} is outside typical range 0.1-10")
-            except (ValueError, TypeError):
-                self.logger.error("'scroll_speed' must be a number")
+        # Validate nested scroll configuration
+        if 'scroll' in self.config:
+            scroll = self.config['scroll']
+            if not isinstance(scroll, dict):
+                self.logger.error("'scroll' must be an object")
                 return False
-        
-        if 'scroll_delay' in self.config:
-            try:
-                scroll_delay = float(self.config['scroll_delay'])
-                if not (0.001 <= scroll_delay <= 0.1):
-                    self.logger.warning(f"'scroll_delay' {scroll_delay} is outside typical range 0.001-0.1")
-            except (ValueError, TypeError):
-                self.logger.error("'scroll_delay' must be a number")
-                return False
-        
-        if 'scroll_loop' in self.config:
-            if not isinstance(self.config['scroll_loop'], bool):
-                self.logger.error("'scroll_loop' must be a boolean")
-                return False
-        
-        if 'scroll_gap_width' in self.config:
-            try:
-                gap_width = float(self.config['scroll_gap_width'])
-                if gap_width < 0:
-                    self.logger.error("'scroll_gap_width' must be non-negative")
+            
+            if 'enabled' in scroll:
+                if not isinstance(scroll['enabled'], bool):
+                    self.logger.error("'scroll.enabled' must be a boolean")
                     return False
-            except (ValueError, TypeError):
-                self.logger.error("'scroll_gap_width' must be a number")
-                return False
+            
+            if 'speed' in scroll:
+                try:
+                    speed = float(scroll['speed'])
+                    if not (0.1 <= speed <= 10):
+                        self.logger.warning(f"'scroll.speed' {speed} is outside typical range 0.1-10")
+                except (ValueError, TypeError):
+                    self.logger.error("'scroll.speed' must be a number")
+                    return False
+            
+            if 'delay' in scroll:
+                try:
+                    delay = float(scroll['delay'])
+                    if not (0.001 <= delay <= 0.1):
+                        self.logger.warning(f"'scroll.delay' {delay} is outside typical range 0.001-0.1")
+                except (ValueError, TypeError):
+                    self.logger.error("'scroll.delay' must be a number")
+                    return False
+            
+            if 'loop' in scroll:
+                if not isinstance(scroll['loop'], bool):
+                    self.logger.error("'scroll.loop' must be a boolean")
+                    return False
+            
+            if 'gap_width' in scroll:
+                try:
+                    gap_width = float(scroll['gap_width'])
+                    if gap_width < 0:
+                        self.logger.error("'scroll.gap_width' must be non-negative")
+                        return False
+                except (ValueError, TypeError):
+                    self.logger.error("'scroll.gap_width' must be a number")
+                    return False
         
         # Validate display_duration
         if 'display_duration' in self.config:
@@ -644,7 +665,7 @@ class TrevorWorldPlugin(BasePlugin):
                 return False
         
         # Validate queue mode configuration
-        if self.config.get('queue_mode', False):
+        if queue_mode:
             if 'message_queue' in self.config:
                 if not isinstance(self.config['message_queue'], list):
                     self.logger.error("'message_queue' must be an array")
@@ -706,29 +727,9 @@ class TrevorWorldPlugin(BasePlugin):
                                 return False
                     
                     # Validate optional boolean overrides
-                    for bool_key in ['show_time', 'scroll_enabled']:
-                        if bool_key in msg:
-                            if not isinstance(msg[bool_key], bool):
-                                self.logger.error(f"message_queue[{idx}]['{bool_key}'] must be a boolean")
-                                return False
-                    
-                    # Validate optional numeric overrides
-                    if 'scroll_speed' in msg:
-                        try:
-                            speed = float(msg['scroll_speed'])
-                            if not (0.1 <= speed <= 10):
-                                self.logger.warning(f"message_queue[{idx}]['scroll_speed'] {speed} is outside typical range 0.1-10")
-                        except (ValueError, TypeError):
-                            self.logger.error(f"message_queue[{idx}]['scroll_speed'] must be a number")
-                            return False
-                    
-                    if 'scroll_delay' in msg:
-                        try:
-                            delay = float(msg['scroll_delay'])
-                            if not (0.001 <= delay <= 0.1):
-                                self.logger.warning(f"message_queue[{idx}]['scroll_delay'] {delay} is outside typical range 0.001-0.1")
-                        except (ValueError, TypeError):
-                            self.logger.error(f"message_queue[{idx}]['scroll_delay'] must be a number")
+                    if 'show_time' in msg:
+                        if not isinstance(msg['show_time'], bool):
+                            self.logger.error(f"message_queue[{idx}]['show_time'] must be a boolean")
                             return False
                     
                     # Validate optional font size overrides
@@ -739,6 +740,36 @@ class TrevorWorldPlugin(BasePlugin):
                                 return False
                             if not (1 <= msg[size_key] <= 100):
                                 self.logger.error(f"message_queue[{idx}]['{size_key}'] must be between 1 and 100")
+                                return False
+                    
+                    # Validate optional nested scroll override
+                    if 'scroll' in msg:
+                        msg_scroll = msg['scroll']
+                        if not isinstance(msg_scroll, dict):
+                            self.logger.error(f"message_queue[{idx}]['scroll'] must be an object")
+                            return False
+                        
+                        if 'enabled' in msg_scroll:
+                            if not isinstance(msg_scroll['enabled'], bool):
+                                self.logger.error(f"message_queue[{idx}]['scroll']['enabled'] must be a boolean")
+                                return False
+                        
+                        if 'speed' in msg_scroll:
+                            try:
+                                speed = float(msg_scroll['speed'])
+                                if not (0.1 <= speed <= 10):
+                                    self.logger.warning(f"message_queue[{idx}]['scroll']['speed'] {speed} is outside typical range 0.1-10")
+                            except (ValueError, TypeError):
+                                self.logger.error(f"message_queue[{idx}]['scroll']['speed'] must be a number")
+                                return False
+                        
+                        if 'delay' in msg_scroll:
+                            try:
+                                delay = float(msg_scroll['delay'])
+                                if not (0.001 <= delay <= 0.1):
+                                    self.logger.warning(f"message_queue[{idx}]['scroll']['delay'] {delay} is outside typical range 0.001-0.1")
+                            except (ValueError, TypeError):
+                                self.logger.error(f"message_queue[{idx}]['scroll']['delay'] must be a number")
                                 return False
             else:
                 self.logger.error("'message_queue' is required when queue_mode is true")

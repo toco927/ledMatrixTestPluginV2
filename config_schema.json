@@ -2,217 +2,212 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "title": "Trevor's World Plugin Configuration",
-  "description": "Configuration schema for Trevor's World plugin with message queue support",
-  "properties": {    
+  "additionalProperties": false,
+
+  "required": ["enabled"],
+
+  "properties": {
     "enabled": {
       "type": "boolean",
-      "default": true,
-      "description": "Enable or disable this plugin"
+      "default": true
     },
+
     "queue_mode": {
       "type": "boolean",
-      "default": false,
-      "description": "Enable message queue mode (cycles through multiple messages) or single message mode"
+      "default": false
     },
-    "message": {
-      "type": "string",
-      "default": "Trevor's Test Plug-in",
-      "minLength": 1,
-      "maxLength": 50,
-      "description": "The greeting message to display (used in single message mode when queue_mode is false)"
-    },
+
     "font_family": {
       "type": "string",
       "enum": ["press_start", "four_by_six", "tom_thumb", "tiny", "picopixel"],
-      "default": "press_start",
-      "description": "Font family for countdown text"
+      "default": "press_start"
     },
-    "message_font_size": {
-      "type": "integer",
-      "default": 10,
-      "minimum": 1,
-      "maximum": 100,
-      "description": "Font size for the message text"
-    },
-    "show_time": {
-      "type": "boolean",
-      "default": true,
-      "description": "Show the current time below the message"
-    },
-    "time_font_size": {
-      "type": "integer",
-      "default": 8,
-      "minimum": 1,
-      "maximum": 100,
-      "description": "Font size for the time text"
-    },
-    "color": {
-      "type": "array",
-      "items": {
-        "type": "integer",
-        "minimum": 0,
-        "maximum": 255
-      },
-      "minItems": 3,
-      "maxItems": 3,
-      "default": [255, 255, 255],
-      "description": "RGB color for the message text [R, G, B]"
-    },
-    "time_color": {
-      "type": "array",
-      "items": {
-        "type": "integer",
-        "minimum": 0,
-        "maximum": 255
-      },
-      "minItems": 3,
-      "maxItems": 3,
-      "default": [0, 255, 255],
-      "description": "RGB color for the time text [R, G, B]"
-    },
+
     "display_duration": {
       "type": "number",
-      "default": 10,
       "minimum": 1,
       "maximum": 300,
-      "description": "How long to display in seconds"
+      "default": 10
     },
-    "scroll_enabled": {
+
+    "color": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 0, "maximum": 255 },
+      "minItems": 3,
+      "maxItems": 3,
+      "default": [255, 255, 255]
+    },
+
+    "time_color": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 0, "maximum": 255 },
+      "minItems": 3,
+      "maxItems": 3,
+      "default": [0, 255, 255]
+    },
+
+    "show_time": {
       "type": "boolean",
-      "title": "Enable Scrolling",
-      "description": "If true, the message will scroll if it is too wide for the display.",
-      "default": false
+      "default": true
     },
-     "scroll_speed": {
-      "type": "number",
-      "default": 1,
-      "minimum": 0.1,
-      "maximum": 10,
-      "description": "Scroll speed in pixels per frame. Higher values = faster scrolling. Typical range: 1-2 pixels/frame for smooth scrolling. Works with scroll_delay to control actual speed."
+
+    "message_font_size": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100,
+      "default": 10
     },
-    "scroll_delay": {
-      "type": "number",
-      "default": 0.01,
-      "minimum": 0.001,
-      "maximum": 0.1,
-      "description": "Delay in seconds per frame. Lower values = higher FPS = smoother scrolling. Default 0.01 = 100 FPS. For 120 FPS use 0.0083, for 240 FPS use 0.0042."
+
+    "time_font_size": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100,
+      "default": 8
     },
-    "scroll_loop": {
-      "type": "boolean",
-      "default": true,
-      "description": "If true, text loops continuously. If false, scrolls once and stops (one-shot mode)."
+
+    "scroll": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "speed": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 10,
+          "default": 1
+        },
+        "delay": {
+          "type": "number",
+          "minimum": 0.001,
+          "maximum": 0.1,
+          "default": 0.01
+        },
+        "loop": {
+          "type": "boolean",
+          "default": true
+        },
+        "gap_width": {
+          "type": "number",
+          "minimum": 0,
+          "default": 32
+        }
+      }
     },
-    "scroll_gap_width": {
-      "type": "number",
-      "default": 32,
-      "minimum": 0,
-      "description": "Gap width in pixels between scroll loops (space between end and start of text when looping)"
+
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 50
     },
+
+    "empty_queue_message": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 50,
+      "default": "Queue Empty"
+    },
+
+    "cache_file": {
+      "type": "string",
+      "default": ".trevor_world_queue_state"
+    },
+
     "message_queue": {
       "type": "array",
-      "description": "Array of messages to cycle through (used when queue_mode is true)",
       "items": {
         "type": "object",
+        "additionalProperties": false,
+        "required": ["message"],
         "properties": {
-          "id": {
-            "type": "string",
-            "description": "Unique identifier for this message"
-          },
-          "order": {
-            "type": "integer",
-            "minimum": 0,
-            "description": "Sort order for message (optional, uses array position as fallback)"
-          },
+          "id": { "type": "string" },
+          "order": { "type": "integer", "minimum": 0 },
+
           "message": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 100,
-            "description": "The message text to display"
+            "maxLength": 100
           },
+
           "display_duration": {
             "type": "number",
             "minimum": 0.5,
-            "maximum": 300,
-            "description": "How long to display this message in seconds"
+            "maximum": 300
           },
+
           "color": {
             "type": "array",
-            "items": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 255
-            },
+            "items": { "type": "integer", "minimum": 0, "maximum": 255 },
             "minItems": 3,
-            "maxItems": 3,
-            "description": "RGB color override for this message [R, G, B]"
+            "maxItems": 3
           },
+
           "time_color": {
             "type": "array",
-            "items": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 255
-            },
+            "items": { "type": "integer", "minimum": 0, "maximum": 255 },
             "minItems": 3,
-            "maxItems": 3,
-            "description": "RGB color override for time in this message [R, G, B]"
+            "maxItems": 3
           },
-          "show_time": {
-            "type": "boolean",
-            "description": "Override show_time setting for this message"
-          },
-          "scroll_enabled": {
-            "type": "boolean",
-            "description": "Override scroll_enabled setting for this message"
-          },
-          "scroll_speed": {
-            "type": "number",
-            "minimum": 0.1,
-            "maximum": 10,
-            "description": "Override scroll_speed for this message"
-          },
-          "scroll_delay": {
-            "type": "number",
-            "minimum": 0.001,
-            "maximum": 0.1,
-            "description": "Override scroll_delay for this message"
-          },
+
+          "show_time": { "type": "boolean" },
+
           "message_font_size": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 100,
-            "description": "Override message_font_size for this message"
+            "maximum": 100
           },
+
           "time_font_size": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 100,
-            "description": "Override time_font_size for this message"
+            "maximum": 100
           },
+
+          "scroll": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "speed": {
+                "type": "number",
+                "minimum": 0.1,
+                "maximum": 10
+              },
+              "delay": {
+                "type": "number",
+                "minimum": 0.001,
+                "maximum": 0.1
+              }
+            }
+          },
+
           "enabled": {
             "type": "boolean",
-            "default": true,
-            "description": "Include this message in the queue (set false to skip)"
+            "default": true
           }
-        },
-        "required": ["message"],
-        "additionalProperties": false
+        }
       }
-    },
-    "empty_queue_message": {
-      "type": "string",
-      "default": "Queue Empty",
-      "minLength": 1,
-      "maxLength": 50,
-      "description": "Message to display when queue is empty or complete (queue_mode only)"
-    },
-    "cache_file": {
-      "type": "string",
-      "default": ".trevor_world_queue_state",
-      "description": "File path for persisting queue state (queue_mode only)"
     }
   },
-  "required": ["enabled"],
-  "additionalProperties": false
-}
 
+  "allOf": [
+    {
+      "if": {
+        "properties": { "queue_mode": { "const": true } }
+      },
+      "then": {
+        "required": ["message_queue"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "queue_mode": { "const": false } }
+      },
+      "then": {
+        "required": ["message"]
+      }
+    }
+  ]
+}

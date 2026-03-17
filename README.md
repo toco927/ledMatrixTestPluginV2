@@ -39,7 +39,11 @@ This plugin is included as a test plugin. To enable it:
     "color": [255, 255, 255],
     "time_color": [0, 255, 255],
     "display_duration": 10,
-    "scroll_enabled": false
+    "scroll": {
+      "enabled": false,
+      "speed": 1,
+      "delay": 0.01
+    }
   }
 }
 ```
@@ -60,7 +64,12 @@ This plugin is included as a test plugin. To enable it:
         "id": "msg_002",
         "message": "Message 2",
         "display_duration": 3,
-        "color": [255, 0, 0]
+        "color": [255, 0, 0],
+        "scroll": {
+          "enabled": true,
+          "speed": 0.5,
+          "delay": 0.02
+        }
       }
     ],
     "empty_queue_message": "Queue Empty",
@@ -91,11 +100,28 @@ sudo systemctl restart ledmatrix
 | `font_family` | string | `"press_start"` | Font family (press_start, four_by_six, tom_thumb, tiny, picopixel) |
 | `message_font_size` | integer | `10` | Font size for message (1-100) |
 | `time_font_size` | integer | `8` | Font size for time (1-100) |
-| `scroll_enabled` | boolean | `false` | Enable text scrolling for wide messages |
-| `scroll_speed` | number | `1` | Scroll speed in pixels per frame (0.1-10) |
-| `scroll_delay` | number | `0.01` | Delay between scroll frames in seconds (0.001-0.1) |
-| `scroll_loop` | boolean | `true` | Loop scrolling continuously |
-| `scroll_gap_width` | number | `32` | Gap width between scroll loops in pixels |
+
+### Scroll Configuration
+
+The `scroll` object controls text scrolling behavior (nested structure):
+
+```json
+"scroll": {
+  "enabled": false,
+  "speed": 1,
+  "delay": 0.01,
+  "loop": true,
+  "gap_width": 32
+}
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `scroll.enabled` | boolean | `false` | Enable text scrolling for wide messages |
+| `scroll.speed` | number | `1` | Scroll speed in pixels per frame (0.1-10) |
+| `scroll.delay` | number | `0.01` | Delay between scroll frames in seconds (0.001-0.1) |
+| `scroll.loop` | boolean | `true` | Loop scrolling continuously |
+| `scroll.gap_width` | number | `32` | Gap width between scroll loops in pixels |
 
 ### Queue Mode Options
 
@@ -113,16 +139,14 @@ Each message in `message_queue` can have:
 |-------|------|----------|-------------|
 | `id` | string | No | Unique identifier for message |
 | `order` | integer | No | Sort order (defaults to array position) |
-| `message` | string | **Yes** | The message text to display |
-| `display_duration` | number | No | Override global duration for this message |
+| `message` | string | **Yes** | The message text to display (1-100 chars) |
+| `display_duration` | number | No | Override global duration for this message (0.5-300 seconds) |
 | `color` | array | No | Override [R, G, B] color for this message |
 | `time_color` | array | No | Override [R, G, B] color for time in this message |
 | `show_time` | boolean | No | Override time display for this message |
-| `scroll_enabled` | boolean | No | Override scrolling for this message |
-| `scroll_speed` | number | No | Override scroll speed for this message |
-| `scroll_delay` | number | No | Override scroll delay for this message |
-| `message_font_size` | integer | No | Override message font size for this message |
-| `time_font_size` | integer | No | Override time font size for this message |
+| `message_font_size` | integer | No | Override message font size for this message (1-100) |
+| `time_font_size` | integer | No | Override time font size for this message (1-100) |
+| `scroll` | object | No | Override scroll settings for this message (see Scroll Configuration) |
 | `enabled` | boolean | No | Include message in queue (default: true) |
 
 ## Examples
@@ -144,8 +168,11 @@ Each message in `message_queue` can have:
     "message": "Go Lightning!",
     "color": [0, 128, 255],
     "display_duration": 15,
-    "scroll_enabled": true,
-    "scroll_speed": 2
+    "scroll": {
+      "enabled": true,
+      "speed": 2,
+      "delay": 0.01
+    }
   }
 }
 ```
@@ -190,8 +217,11 @@ Each message in `message_queue` can have:
         "message": "This message scrolls across the display",
         "display_duration": 5,
         "color": [255, 0, 255],
-        "scroll_enabled": true,
-        "scroll_speed": 1.5
+        "scroll": {
+          "enabled": true,
+          "speed": 1.5,
+          "delay": 0.01
+        }
       }
     ],
     "empty_queue_message": "All done!"
@@ -199,7 +229,7 @@ Each message in `message_queue` can have:
 }
 ```
 
-### 5. Queue with Per-Message Font Sizes
+### 5. Queue with Per-Message Font Sizes and Scroll
 ```json
 {
   "trevor-world": {
@@ -210,12 +240,20 @@ Each message in `message_queue` can have:
       {
         "message": "Big Text",
         "message_font_size": 14,
-        "display_duration": 3
+        "display_duration": 3,
+        "scroll": {
+          "enabled": false
+        }
       },
       {
-        "message": "Small Text",
+        "message": "Small Scrolling Text",
         "message_font_size": 6,
-        "display_duration": 3
+        "display_duration": 5,
+        "scroll": {
+          "enabled": true,
+          "speed": 0.5,
+          "delay": 0.02
+        }
       }
     ]
   }
