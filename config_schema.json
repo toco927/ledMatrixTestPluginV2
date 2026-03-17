@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "object",
   "title": "Trevor's World Plugin Configuration",
+  "type": "object",
   "additionalProperties": false,
 
   "required": ["enabled"],
@@ -14,7 +14,126 @@
 
     "queue_mode": {
       "type": "boolean",
-      "default": false
+      "default": true,
+      "description": "Enable message queue mode"
+    },
+
+    "messages": {
+      "type": "array",
+      "title": "Message Queue",
+      "description": "Manage messages displayed on the LED matrix",
+      "x-widget": "array-table",
+      "x-columns": ["enabled", "message", "display_duration", "order"],
+      "default": [],
+      "items": {
+        "type": "object",
+        "title": "Message Entry",
+        "additionalProperties": false,
+
+        "required": ["message"],
+
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "ID",
+            "x-display": "hidden"
+          },
+
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "minLength": 1,
+            "maxLength": 100
+          },
+
+          "order": {
+            "type": "integer",
+            "title": "Order",
+            "minimum": 0,
+            "default": 0
+          },
+
+          "display_duration": {
+            "type": "number",
+            "title": "Duration",
+            "minimum": 0.5,
+            "maximum": 300,
+            "description": "Override display duration (seconds)"
+          },
+
+          "color": {
+            "type": "array",
+            "title": "Color",
+            "items": { "type": "integer", "minimum": 0, "maximum": 255 },
+            "minItems": 3,
+            "maxItems": 3
+          },
+
+          "time_color": {
+            "type": "array",
+            "title": "Time Color",
+            "items": { "type": "integer", "minimum": 0, "maximum": 255 },
+            "minItems": 3,
+            "maxItems": 3
+          },
+
+          "show_time": {
+            "type": "boolean",
+            "title": "Show Time"
+          },
+
+          "message_font_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+
+          "time_font_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+
+          "scroll": {
+            "type": "object",
+            "title": "Scroll Override",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "speed": {
+                "type": "number",
+                "minimum": 0.1,
+                "maximum": 10
+              },
+              "delay": {
+                "type": "number",
+                "minimum": 0.001,
+                "maximum": 0.1
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "default_message": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 50,
+      "default": "Trevor's Plugin"
+    },
+
+    "empty_queue_message": {
+      "type": "string",
+      "default": "Queue Empty",
+      "minLength": 1,
+      "maxLength": 50
     },
 
     "font_family": {
@@ -27,7 +146,8 @@
       "type": "number",
       "minimum": 1,
       "maximum": 300,
-      "default": 10
+      "default": 10,
+      "description": "Default duration per message"
     },
 
     "color": {
@@ -67,6 +187,7 @@
 
     "scroll": {
       "type": "object",
+      "title": "Scroll Settings",
       "additionalProperties": false,
       "properties": {
         "enabled": {
@@ -97,117 +218,9 @@
       }
     },
 
-    "message": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 50
-    },
-
-    "empty_queue_message": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 50,
-      "default": "Queue Empty"
-    },
-
     "cache_file": {
       "type": "string",
       "default": ".trevor_world_queue_state"
-    },
-
-    "message_queue": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["message"],
-        "properties": {
-          "id": { "type": "string" },
-          "order": { "type": "integer", "minimum": 0 },
-
-          "message": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 100
-          },
-
-          "display_duration": {
-            "type": "number",
-            "minimum": 0.5,
-            "maximum": 300
-          },
-
-          "color": {
-            "type": "array",
-            "items": { "type": "integer", "minimum": 0, "maximum": 255 },
-            "minItems": 3,
-            "maxItems": 3
-          },
-
-          "time_color": {
-            "type": "array",
-            "items": { "type": "integer", "minimum": 0, "maximum": 255 },
-            "minItems": 3,
-            "maxItems": 3
-          },
-
-          "show_time": { "type": "boolean" },
-
-          "message_font_size": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 100
-          },
-
-          "time_font_size": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 100
-          },
-
-          "scroll": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "enabled": { "type": "boolean" },
-              "speed": {
-                "type": "number",
-                "minimum": 0.1,
-                "maximum": 10
-              },
-              "delay": {
-                "type": "number",
-                "minimum": 0.001,
-                "maximum": 0.1
-              }
-            }
-          },
-
-          "enabled": {
-            "type": "boolean",
-            "default": true
-          }
-        }
-      }
     }
-  },
-
-  "allOf": [
-    {
-      "if": {
-        "properties": { "queue_mode": { "const": true } }
-      },
-      "then": {
-        "required": ["message_queue"]
-      }
-    },
-    {
-      "if": {
-        "properties": { "queue_mode": { "const": false } }
-      },
-      "then": {
-        "required": ["message"]
-      }
-    }
-  ]
+  }
 }

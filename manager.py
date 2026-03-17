@@ -34,9 +34,10 @@ class TrevorWorldPlugin(BasePlugin):
         """Initialize the Trevor's World plugin with queue support."""
         super().__init__(plugin_id, config, display_manager, cache_manager, plugin_manager)
 
-        # Queue mode configuration
-        self.queue_mode = config.get('queue_mode', False)
-        self.message_queue = config.get('message_queue', [])
+        # Queue mode configuration (default: queue mode enabled)
+        self.queue_mode = config.get('queue_mode', True)
+        self.messages = config.get('messages', [])  # Primary: "messages" array
+        self.message_queue = self.messages  # Backward compatibility alias
         self.empty_queue_message = config.get('empty_queue_message', 'Queue Empty')
         self.cache_file = config.get('cache_file', '.trevor_world_queue_state')
         
@@ -64,9 +65,9 @@ class TrevorWorldPlugin(BasePlugin):
         
         self.display_duration = config.get('display_duration', 5)
         
-        # Single message mode (non-queue)
+        # Single message mode (non-queue) - use default_message property
         if not self.queue_mode:
-            self.message = config.get('message', 'Trevor made this')
+            self.message = config.get('default_message', config.get('message', 'Trevor\'s Plugin'))
         else:
             self.message = ''  # Will be set from queue
 
@@ -94,7 +95,7 @@ class TrevorWorldPlugin(BasePlugin):
         if self.queue_mode:
             self._load_queue_state()
             self._load_current_message_settings()
-            self.logger.info(f"Queue mode enabled with {len(self.message_queue)} messages")
+            self.logger.info(f"Queue mode enabled with {len(self.messages)} messages")
         else:
             self.logger.info(f"Single message mode: '{self.message}'")
 
@@ -183,10 +184,10 @@ class TrevorWorldPlugin(BasePlugin):
 
     def _get_enabled_queue_messages(self):
         """Get list of enabled messages in order."""
-        enabled = [msg for msg in self.message_queue if msg.get('enabled', True)]
+        enabled = [msg for msg in self.messages if msg.get('enabled', True)]
         # Sort by order if provided
         try:
-            enabled.sort(key=lambda x: x.get('order', self.message_queue.index(x)))
+            enabled.sort(key=lambda x: x.get('order', self.messages.index(x)))
         except Exception:
             pass
         return enabled
@@ -515,9 +516,11 @@ class TrevorWorldPlugin(BasePlugin):
         
         # Handle queue configuration changes
         if self.queue_mode:
-            new_queue = new_config.get('message_queue', self.message_queue)
-            if new_queue != self.message_queue:
-                self.message_queue = new_queue
+            # Support both "messages" (new) and "message_queue" (old) for backward compatibility
+            new_messages = new_config.get('messages', new_config.get('message_queue', self.messages))
+            if new_messages != self.messages:
+                self.messages = new_messages
+                self.message_queue = new_messages  # Keep alias in sync
                 self.current_queue_index = 0
                 self.queue_complete = False
                 self._load_current_message_settings()
@@ -528,8 +531,8 @@ class TrevorWorldPlugin(BasePlugin):
             
             self.empty_queue_message = new_config.get('empty_queue_message', self.empty_queue_message)
         else:
-            # Single message mode
-            self.message = new_config.get('message', self.message)
+            # Single message mode - support both "default_message" (new) and "message" (old)
+            self.message = new_config.get('default_message', new_config.get('message', self.message))
         
         self.show_time = new_config.get('show_time', self.show_time)
         self.color = tuple(new_config.get('color', self.color))
@@ -567,18 +570,18 @@ class TrevorWorldPlugin(BasePlugin):
                 self.logger.error("'queue_mode' must be a boolean")
                 return False
         
-        queue_mode = self.config.get('queue_mode', False)
+        queue_mode = self.config.get('queue_mode', True)
         
-        # Validate message (required for single message mode, optional for queue mode)
-        if 'message' in self.config:
-            if not isinstance(self.config['message'], str):
-                self.logger.error("'message' must be a string")
+        # Validate default_message (for single-message mode when queue_mode=false)
+        if 'default_message' in self.config:
+            if not isinstance(self.config['default_message'], str):
+                self.logger.error("'default_message' must be a string")
                 return False
-            if not (1 <= len(self.config['message']) <= 50):
-                self.logger.error("'message' must be between 1 and 50 characters")
+            if not (1 <= len(self.config['default_message']) <= 50):
+                self.logger.error("'default_message' must be between 1 and 50 characters")
                 return False
         elif not queue_mode:
-            self.logger.error("'message' is required when queue_mode is false")
+            self.logger.error("'default_message' is required when queue_mode is false")
             return False
         
         # Validate colors
@@ -666,53 +669,55 @@ class TrevorWorldPlugin(BasePlugin):
         
         # Validate queue mode configuration
         if queue_mode:
-            if 'message_queue' in self.config:
-                if not isinstance(self.config['message_queue'], list):
-                    self.logger.error("'message_queue' must be an array")
+            # Support both "messages" (new) and "message_queue" (old) for backward compatibility
+            messages_array = self.config.get('messages', self.config.get('message_queue', []))
+            
+            if not messages_array:
+                self.logger.error("'messages' array cannot be empty in queue_mode")
+                return False
+            
+            if not isinstance(messages_array, list):
+                self.logger.error("'messages' must be an array")
+                return False
+            
+            # Validate each message in the queue
+            for idx, msg in enumerate(messages_array):
+                if not isinstance(msg, dict):
+                    self.logger.error(f"messages[{idx}] must be an object")
                     return False
                 
-                if not self.config['message_queue']:
-                    self.logger.error("'message_queue' cannot be empty in queue_mode")
+                # Required: message field
+                if 'message' not in msg:
+                    self.logger.error(f"messages[{idx}]: 'message' is required")
                     return False
                 
-                # Validate each message in the queue
-                for idx, msg in enumerate(self.config['message_queue']):
-                    if not isinstance(msg, dict):
-                        self.logger.error(f"message_queue[{idx}] must be an object")
-                        return False
-                    
-                    # Required: message field
-                    if 'message' not in msg:
-                        self.logger.error(f"message_queue[{idx}]: 'message' is required")
-                        return False
-                    
-                    if not isinstance(msg['message'], str):
-                        self.logger.error(f"message_queue[{idx}]['message'] must be a string")
-                        return False
-                    
-                    if not (1 <= len(msg['message']) <= 100):
-                        self.logger.error(f"message_queue[{idx}]['message'] must be between 1 and 100 characters")
-                        return False
+                if not isinstance(msg['message'], str):
+                    self.logger.error(f"messages[{idx}]['message'] must be a string")
+                    return False
+                
+                if not (1 <= len(msg['message']) <= 100):
+                    self.logger.error(f"messages[{idx}]['message'] must be between 1 and 100 characters")
+                    return False
                     
                     # Validate optional fields
                     if 'display_duration' in msg:
                         try:
                             dur = float(msg['display_duration'])
                             if not (0.5 <= dur <= 300):
-                                self.logger.error(f"message_queue[{idx}]['display_duration'] must be between 0.5 and 300")
+                                self.logger.error(f"messages[{idx}]['display_duration'] must be between 0.5 and 300")
                                 return False
                         except (ValueError, TypeError):
-                            self.logger.error(f"message_queue[{idx}]['display_duration'] must be a number")
+                            self.logger.error(f"messages[{idx}]['display_duration'] must be a number")
                             return False
                     
                     if 'order' in msg:
                         if not isinstance(msg['order'], int) or msg['order'] < 0:
-                            self.logger.error(f"message_queue[{idx}]['order'] must be a non-negative integer")
+                            self.logger.error(f"messages[{idx}]['order'] must be a non-negative integer")
                             return False
                     
                     if 'enabled' in msg:
                         if not isinstance(msg['enabled'], bool):
-                            self.logger.error(f"message_queue[{idx}]['enabled'] must be a boolean")
+                            self.logger.error(f"messages[{idx}]['enabled'] must be a boolean")
                             return False
                     
                     # Validate optional color overrides
@@ -720,60 +725,57 @@ class TrevorWorldPlugin(BasePlugin):
                         if color_key in msg:
                             color = msg[color_key]
                             if not isinstance(color, (list, tuple)) or len(color) != 3:
-                                self.logger.error(f"message_queue[{idx}]['{color_key}'] must be an RGB array [R, G, B]")
+                                self.logger.error(f"messages[{idx}]['{color_key}'] must be an RGB array [R, G, B]")
                                 return False
                             if not all(isinstance(c, int) and 0 <= c <= 255 for c in color):
-                                self.logger.error(f"message_queue[{idx}]['{color_key}'] values must be integers 0-255")
+                                self.logger.error(f"messages[{idx}]['{color_key}'] values must be integers 0-255")
                                 return False
                     
                     # Validate optional boolean overrides
                     if 'show_time' in msg:
                         if not isinstance(msg['show_time'], bool):
-                            self.logger.error(f"message_queue[{idx}]['show_time'] must be a boolean")
+                            self.logger.error(f"messages[{idx}]['show_time'] must be a boolean")
                             return False
                     
                     # Validate optional font size overrides
                     for size_key in ['message_font_size', 'time_font_size']:
                         if size_key in msg:
                             if not isinstance(msg[size_key], int):
-                                self.logger.error(f"message_queue[{idx}]['{size_key}'] must be an integer")
+                                self.logger.error(f"messages[{idx}]['{size_key}'] must be an integer")
                                 return False
                             if not (1 <= msg[size_key] <= 100):
-                                self.logger.error(f"message_queue[{idx}]['{size_key}'] must be between 1 and 100")
+                                self.logger.error(f"messages[{idx}]['{size_key}'] must be between 1 and 100")
                                 return False
                     
                     # Validate optional nested scroll override
                     if 'scroll' in msg:
                         msg_scroll = msg['scroll']
                         if not isinstance(msg_scroll, dict):
-                            self.logger.error(f"message_queue[{idx}]['scroll'] must be an object")
+                            self.logger.error(f"messages[{idx}]['scroll'] must be an object")
                             return False
                         
                         if 'enabled' in msg_scroll:
                             if not isinstance(msg_scroll['enabled'], bool):
-                                self.logger.error(f"message_queue[{idx}]['scroll']['enabled'] must be a boolean")
+                                self.logger.error(f"messages[{idx}]['scroll']['enabled'] must be a boolean")
                                 return False
                         
                         if 'speed' in msg_scroll:
                             try:
                                 speed = float(msg_scroll['speed'])
                                 if not (0.1 <= speed <= 10):
-                                    self.logger.warning(f"message_queue[{idx}]['scroll']['speed'] {speed} is outside typical range 0.1-10")
+                                    self.logger.warning(f"messages[{idx}]['scroll']['speed'] {speed} is outside typical range 0.1-10")
                             except (ValueError, TypeError):
-                                self.logger.error(f"message_queue[{idx}]['scroll']['speed'] must be a number")
+                                self.logger.error(f"messages[{idx}]['scroll']['speed'] must be a number")
                                 return False
                         
                         if 'delay' in msg_scroll:
                             try:
                                 delay = float(msg_scroll['delay'])
                                 if not (0.001 <= delay <= 0.1):
-                                    self.logger.warning(f"message_queue[{idx}]['scroll']['delay'] {delay} is outside typical range 0.001-0.1")
+                                    self.logger.warning(f"messages[{idx}]['scroll']['delay'] {delay} is outside typical range 0.001-0.1")
                             except (ValueError, TypeError):
-                                self.logger.error(f"message_queue[{idx}]['scroll']['delay'] must be a number")
+                                self.logger.error(f"messages[{idx}]['scroll']['delay'] must be a number")
                                 return False
-            else:
-                self.logger.error("'message_queue' is required when queue_mode is true")
-                return False
             
             # Validate optional queue settings
             if 'empty_queue_message' in self.config:
