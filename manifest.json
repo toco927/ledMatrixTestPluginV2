@@ -3,7 +3,7 @@
   "name": "Trevor's World",
   "version": "1.0.3",
   "author": "toco927",
-  "description": "A simple test plugin that displays a customizable message. Testing pUOurposes.",
+  "description": "A simple test plugin that displays a customizable message. Testing PPpUOurposes.",
   "entry_point": "manager.py",
   "class_name": "TrevorWorldPlugin",
   "category": "demo",
