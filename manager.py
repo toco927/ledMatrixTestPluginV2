@@ -34,8 +34,9 @@ class TrevorWorldPlugin(BasePlugin):
         self.color = tuple(config.get('color', [255, 255, 255]))
         self.time_color = tuple(config.get('time_color', [0, 255, 255]))
         
-        self.message_size = config.get('message_size', 10)  # Font size for message
-        self.time_size = config.get('time_size', 8)  # Font size for time
+        self.font_family = config.get('font_family', 'press_start')
+        self.message_font_size = config.get('message_font_size', 10)  # Font size for message
+        self.time_font_size = config.get('time_font_size', 8)  # Font size for time
 
         # Load the 6x9 BDF font
         self._load_font()
@@ -62,7 +63,7 @@ class TrevorWorldPlugin(BasePlugin):
                 manager_id=self.plugin_id,
                 element_key=f"{self.plugin_id}.message",
                 family="press_start",
-                size_px=self.message_size,
+                size_px=self.message_font_size,
                 color=self.color
             )
 
@@ -71,7 +72,7 @@ class TrevorWorldPlugin(BasePlugin):
                 manager_id=self.plugin_id,
                 element_key=f"{self.plugin_id}.time",
                 family="press_start",
-                size_px=self.time_size,
+                size_px=self.time_font_size,
                 color=self.time_color
             )
 
@@ -147,31 +148,73 @@ class TrevorWorldPlugin(BasePlugin):
 
             try:
                 if hasattr(self.plugin_manager, 'font_manager'):
+                    
                     font_manager = self.plugin_manager.font_manager
-                    message_font = font_manager.get_font(f"{self.plugin_id}.message", self.message_size)
-                    time_font = font_manager.get_font(f"{self.plugin_id}.time", self.time_size)
+                    
+                    message_font = font_manager.resolve_font(
+                        element_key=f"{self.plugin_id}.message",
+                        family=self.font_family,
+                        size_px=self.message_font_size
+                    )
+
+                    time_font = font_manager.resolve_font(
+                        element_key=f"{self.plugin_id}.time",
+                        family=self.font_family,
+                        size_px=self.time_font_size
+                    )
+                    
+                    # message_font = font_manager.get_font(f"{self.plugin_id}.message", self.message_font_size)
+                    # time_font = font_manager.get_font(f"{self.plugin_id}.time", self.time_font_size)
             except Exception as e:
                 self.logger.warning(f"Error getting fonts from font manager: {e}")
 
             # Calculate positions for centered text
+            # --- Centering logic ---
+            def get_text_size(text, font=None, font_fallback=None):
+                # Try to use display_manager's get_text_width and get_font_height if available
+                try:
+                    if font and hasattr(self.display_manager, 'get_text_width') and hasattr(self.display_manager, 'get_font_height'):
+                        w = self.display_manager.get_text_width(text, font=font)
+                        h = self.display_manager.get_font_height(font=font)
+                        return w, h
+                except Exception:
+                    pass
+                # Fallback: use BDF font if available
+                try:
+                    if font_fallback and hasattr(self.display_manager, 'get_text_width') and hasattr(self.display_manager, 'get_font_height'):
+                        w = self.display_manager.get_text_width(text, font=font_fallback)
+                        h = self.display_manager.get_font_height(font=font_fallback)
+                        return w, h
+                except Exception:
+                    pass
+                # Last resort: estimate
+                return len(text) * 6, 9  # crude guess
+
             if self.show_time:
-                # Display message at top, time at bottom
-                message_y = height // 3
-                time_y = (2 * height) // 3
+                # --- Center message horizontally, time at bottom ---
+                # Message
+                msg_w, msg_h = get_text_size(self.message, font=message_font, font_fallback=self.bdf_font)
+                msg_x = (width - msg_w) // 2
+                msg_y = (height // 2) - (msg_h // 2)
+
+                # Time
+                time_w, time_h = get_text_size(self.current_time_str, font=time_font, font_fallback=self.bdf_font)
+                time_x = (width - time_w) // 2
+                time_y = height - time_h  # bottom of display
 
                 # Draw the greeting message
                 if message_font:
                     self.display_manager.draw_text(
                         self.message,
-                        x=width // 2,
-                        y=message_y,
+                        x=msg_x,
+                        y=msg_y,
                         font=message_font
                     )
                 else:
                     self.display_manager.draw_text(
                         self.message,
-                        x=width // 2,
-                        y=message_y,
+                        x=msg_x,
+                        y=msg_y,
                         color=self.color,
                         font=self.bdf_font
                     )
@@ -181,32 +224,35 @@ class TrevorWorldPlugin(BasePlugin):
                     if time_font:
                         self.display_manager.draw_text(
                             self.current_time_str,
-                            x=width // 2,
+                            x=time_x,
                             y=time_y,
                             font=time_font
                         )
                     else:
                         self.display_manager.draw_text(
                             self.current_time_str,
-                            x=width // 2,
+                            x=time_x,
                             y=time_y,
                             color=self.time_color,
                             font=self.bdf_font
                         )
             else:
-                # Display message centered
+                # Center message both horizontally and vertically
+                msg_w, msg_h = get_text_size(self.message, font=message_font, font_fallback=self.bdf_font)
+                msg_x = (width - msg_w) // 2
+                msg_y = (height - msg_h) // 2
                 if message_font:
                     self.display_manager.draw_text(
                         self.message,
-                        x=width // 2,
-                        y=height // 2,
+                        x=msg_x,
+                        y=msg_y,
                         font=message_font
                     )
                 else:
                     self.display_manager.draw_text(
                         self.message,
-                        x=width // 2,
-                        y=height // 2,
+                        x=msg_x,
+                        y=msg_y,
                         color=self.color,
                         font=self.bdf_font
                     )
@@ -247,7 +293,12 @@ class TrevorWorldPlugin(BasePlugin):
                 return False
             if len(self.config['message']) > 50:
                 self.logger.warning("'message' is very long, may not fit on display")
-        
+
+        if 'font_family' in self.config:
+            if self.config['font_family'] not in ['press_start', 'four_by_six', 'tom_thumb', 'tiny', 'picopixel']:
+                self.logger.error("'font_family' must be one of the predefined font families")
+                return False
+
         # Validate colors
         for color_key in ['color', 'time_color']:
             if color_key in self.config:
@@ -265,22 +316,22 @@ class TrevorWorldPlugin(BasePlugin):
                 self.logger.error("'show_time' must be a boolean")
                 return False
 
-        # Validate message_size
-        if 'message_size' in self.config:
-            if not isinstance(self.config['message_size'], int):
-                self.logger.error("'message_size' must be an integer")
+        # Validate message_font_size
+        if 'message_font_size' in self.config:
+            if not isinstance(self.config['message_font_size'], int):
+                self.logger.error("'message_font_size' must be an integer")
                 return False
-            if not (1 <= self.config['message_size'] <= 100):
-                self.logger.error("'message_size' must be between 1 and 100")
+            if not (1 <= self.config['message_font_size'] <= 100):
+                self.logger.error("'message_font_size' must be between 1 and 100")
                 return False
 
-        # Validate time_size
-        if 'time_size' in self.config:
-            if not isinstance(self.config['time_size'], int):
-                self.logger.error("'time_size' must be an integer")
+        # Validate time_font_size
+        if 'time_font_size' in self.config:
+            if not isinstance(self.config['time_font_size'], int):
+                self.logger.error("'time_font_size' must be an integer")
                 return False
-            if not (1 <= self.config['time_size'] <= 100):
-                self.logger.error("'time_size' must be between 1 and 100")
+            if not (1 <= self.config['time_font_size'] <= 100):
+                self.logger.error("'time_font_size' must be between 1 and 100")
                 return False
 
         self.logger.info("Configuration validated successfully")
@@ -295,8 +346,8 @@ class TrevorWorldPlugin(BasePlugin):
         info['show_time'] = self.show_time
         info['last_update'] = self.last_update
         info['current_time'] = self.current_time_str
-        info['message_size'] = self.message_size
-        info['time_size'] = self.time_size
+        info['message_font_size'] = self.message_font_size
+        info['time_font_size'] = self.time_font_size
         return info
     
     def cleanup(self):

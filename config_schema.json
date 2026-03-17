@@ -16,7 +16,13 @@
       "maxLength": 50,
       "description": "The greeting message to display"
     },
-    "message_size": {
+    "font_family": {
+      "type": "string",
+      "enum": ["press_start", "four_by_six", "tom_thumb", "tiny", "picopixel"],
+      "default": "press_start",
+      "description": "Font family for countdown text"
+    },
+    "message_font_size": {
       "type": "integer",
       "default": 10,
       "minimum": 1,
@@ -28,7 +34,7 @@
       "default": true,
       "description": "Show the current time below the message"
     },
-    "time_size": {
+    "time_font_size": {
       "type": "integer",
       "default": 8,
       "minimum": 1,
