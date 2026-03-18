@@ -1,75 +1,26 @@
 {
-  "_comment": "Add this to your config/config.json to enable the Trevor's World plugin with message queue",
+  "_comment": "Add this to your config/config.json to enable the Trevor's World plugin",
   "trevor-world": {
     "enabled": true,
-    "queue_mode": true,
-    "show_time": true,
     "font_family": "press_start",
     "message_font_size": 10,
-    "time_font_size": 8,
     "color": [255, 255, 255],
-    "time_color": [0, 255, 255],
-    "scroll": {
-      "enabled": false,
-      "speed": 1,
-      "delay": 0.01,
-      "loop": true,
-      "gap_width": 32
-    },
     "display_duration": 5,
-    "empty_queue_message": "Queue Empty",
-    "cache_file": ".trevor_world_queue_state",
     "messages": [
       {
-        "id": "msg_001",
-        "order": 1,
         "message": "Trevor made this",
         "display_duration": 5,
-        "color": [255, 255, 255],
-        "time_color": [0, 255, 255],
-        "show_time": true,
-        "message_font_size": 10,
-        "time_font_size": 8,
-        "scroll": {
-          "enabled": false,
-          "speed": 1,
-          "delay": 0.01
-        },
-        "enabled": true
+        "color": [255, 255, 255]
       },
       {
-        "id": "msg_002",
-        "order": 2,
-        "message": "Welcome to LED Matrix!",
+        "message": "Welcome to LED Matrix",
         "display_duration": 4,
-        "color": [0, 255, 0],
-        "time_color": [0, 255, 255],
-        "show_time": false,
-        "message_font_size": 8,
-        "time_font_size": 8,
-        "scroll": {
-          "enabled": true,
-          "speed": 0.5,
-          "delay": 0.02
-        },
-        "enabled": true
+        "color": [0, 255, 0]
       },
       {
-        "id": "msg_003",
-        "order": 3,
-        "message": "Custom Message Queue System",
+        "message": "Custom Message System",
         "display_duration": 6,
-        "color": [255, 128, 0],
-        "time_color": [128, 255, 0],
-        "show_time": true,
-        "message_font_size": 9,
-        "time_font_size": 7,
-        "scroll": {
-          "enabled": true,
-          "speed": 0.7,
-          "delay": 0.015
-        },
-        "enabled": true
+        "color": [255, 128, 0]
       }
     ]
   }
