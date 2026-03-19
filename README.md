@@ -17,6 +17,7 @@ This plugin demonstrates:
 - ✅ Random number (1-10) appended to each message
 - ✅ Per-message color override
 - ✅ Per-message display duration
+- ✅ Universal scrolling (applies to all messages)
 - ✅ Configurable default font and colors
 - ✅ Graceful error handling
 - ✅ Configuration validation
@@ -33,6 +34,12 @@ This plugin demonstrates:
     "message_font_size": 10,
     "color": [255, 255, 255],
     "display_duration": 5,
+    "scroll": {
+      "enabled": false,
+      "speed": 1,
+      "delay": 0.01,
+      "gap_width": 32
+    },
     "messages": [
       {
         "message": "Message One",
@@ -69,6 +76,10 @@ This plugin demonstrates:
 | `color` | RGB array | `[255, 255, 255]` | Default text color [R, G, B] |
 | `display_duration` | number | `5` | Default seconds per message |
 | `font_path` | string | `assets/fonts/PressStart2P-Regular.ttf` | Path to font file |
+| `scroll.enabled` | boolean | `false` | Enable scrolling for wide messages |
+| `scroll.speed` | number | `1` | Pixels to scroll per frame (0.1-50) |
+| `scroll.delay` | number | `0.01` | Seconds between scroll updates (0.001-0.1) |
+| `scroll.gap_width` | number | `32` | Gap in pixels between text loops |
 
 ### Message-Level Settings
 
@@ -104,6 +115,29 @@ Example:
 ```
 
 The random number changes each time the message is displayed.
+
+### Scrolling
+
+Scrolling is **universal** - the same scrolling settings apply to all messages:
+
+- **When enabled**: Text that is wider than the display width will scroll horizontally
+- **When disabled**: Text is centered (default behavior)
+- **Settings affect all messages**: Changing scroll settings applies to the entire message list, not individual messages
+
+Example with scrolling enabled:
+```json
+"scroll": {
+  "enabled": true,
+  "speed": 1,
+  "delay": 0.01,
+  "gap_width": 32
+}
+```
+
+**Scrolling Parameters:**
+- `speed`: Pixels per frame (higher = faster scrolling)
+- `delay`: Seconds between each scroll update (lower = smoother but faster)
+- `gap_width`: Blank space in pixels between text loops
 
 ## Configuration Schema
 

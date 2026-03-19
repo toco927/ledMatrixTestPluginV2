@@ -35,6 +35,13 @@ class TrevorWorldPlugin(BasePlugin):
         self.color = tuple(config.get('color', [255, 255, 255]))
         self.default_display_duration = config.get('display_duration', 5)
         
+        # Scrolling settings (universal for all messages)
+        scroll_config = config.get('scroll', {})
+        self.scroll_enabled = scroll_config.get('enabled', False)
+        self.scroll_speed = float(scroll_config.get('speed', 1))  # pixels per frame
+        self.scroll_delay = float(scroll_config.get('delay', 0.01))  # seconds per frame
+        self.scroll_gap_width = scroll_config.get('gap_width', 32)  # pixels between loop
+        
         # Queue state
         self.current_message_index = 0
         self.message_start_time = time.time()
@@ -47,6 +54,11 @@ class TrevorWorldPlugin(BasePlugin):
         self.font = None
         self.message_width = 0
         self.message_height = 0
+        
+        # Scrolling state
+        self.scroll_position = 0
+        self.last_scroll_time = time.time()
+        self.text_image_cache = None
         
         # Load font and set up first message
         self._load_font()
@@ -162,6 +174,30 @@ class TrevorWorldPlugin(BasePlugin):
             self.message_width = len(self.current_message) * 8
             self.message_height = 10
 
+    def _create_scroll_cache(self):
+        """Create a cached image for scrolling text."""
+        if not self.font or not self.message_width:
+            return
+        
+        try:
+            width = self.display_manager.width
+            height = self.display_manager.height
+            display_text = f"{self.current_message} {self.current_random_number}"
+            
+            # Cache width: display + message + display + gap
+            cache_width = width + self.message_width + width + self.scroll_gap_width
+            self.text_image_cache = Image.new('RGB', (cache_width, height), (0, 0, 0))
+            draw = ImageDraw.Draw(self.text_image_cache)
+            
+            # Draw text in the middle section
+            y_pos = (height - self.message_height) // 2
+            draw.text((width, y_pos), display_text, font=self.font, fill=self.current_message_color)
+            
+            self.logger.debug(f"Created scroll cache: {cache_width}x{height}")
+        except Exception as e:
+            self.logger.error(f"Failed to create scroll cache: {e}")
+            self.text_image_cache = None
+
     def _advance_to_next_message(self):
         """Move to the next message in the queue."""
         if not self.messages:
@@ -174,6 +210,8 @@ class TrevorWorldPlugin(BasePlugin):
         
         self._load_current_message()
         self._calculate_text_dimensions()
+        self.text_image_cache = None  # Clear cache for new message
+        self.scroll_position = 0  # Reset scroll position
 
     def update(self):
         """Update plugin - this is called periodically but timing is handled in display()."""
@@ -186,7 +224,7 @@ class TrevorWorldPlugin(BasePlugin):
         Render the plugin display.
         
         Displays the current message with appended random number (1-10).
-        Handles message advancement timing to ensure accurate cycling.
+        Supports scrolling if enabled. Handles message advancement timing.
         """
         try:
             if force_clear:
@@ -204,12 +242,45 @@ class TrevorWorldPlugin(BasePlugin):
                 self.logger.error("Font not loaded, cannot display")
                 return
             
-            # Create display image
-            img = Image.new('RGB', (width, height), (0, 0, 0))
-            draw = ImageDraw.Draw(img)
-            
             # Build display text: message + random number
             display_text = f"{self.current_message} {self.current_random_number}"
+            
+            # Handle scrolling if enabled and text is wider than display
+            if self.scroll_enabled and self.message_width > width:
+                # Create cache if needed
+                if not self.text_image_cache:
+                    self._create_scroll_cache()
+                
+                if self.text_image_cache:
+                    # Update scroll position
+                    now = time.time()
+                    if now - self.last_scroll_time >= self.scroll_delay:
+                        self.scroll_position += self.scroll_speed
+                        cache_width = width + self.message_width + width + self.scroll_gap_width
+                        
+                        # Loop around
+                        if self.scroll_position > cache_width - width:
+                            self.scroll_position = 0
+                        
+                        self.last_scroll_time = now
+                    
+                    # Extract visible portion and display
+                    x_offset = int(self.scroll_position)
+                    visible = self.text_image_cache.crop((x_offset, 0, x_offset + width, height))
+                    
+                    if hasattr(self.display_manager, 'image') and self.display_manager.image is not None:
+                        self.display_manager.image.paste(visible, (0, 0))
+                    else:
+                        img = Image.new('RGB', (width, height), (0, 0, 0))
+                        img.paste(visible, (0, 0))
+                        self.display_manager.image = img
+                    
+                    self.display_manager.update_display()
+                    return
+            
+            # Non-scrolling: center text display
+            img = Image.new('RGB', (width, height), (0, 0, 0))
+            draw = ImageDraw.Draw(img)
             
             # Calculate text dimensions for centering
             try:
@@ -247,6 +318,8 @@ class TrevorWorldPlugin(BasePlugin):
             self.messages = new_messages
             self.current_message_index = 0
             self._load_current_message()
+            self.text_image_cache = None
+            self.scroll_position = 0
             self.logger.info(f"Messages updated: {len(self.messages)} messages loaded")
         
         # Update colors
@@ -261,6 +334,17 @@ class TrevorWorldPlugin(BasePlugin):
         
         # Update display duration
         self.default_display_duration = new_config.get('display_duration', self.default_display_duration)
+        
+        # Update scroll settings
+        scroll_config = new_config.get('scroll', {})
+        self.scroll_enabled = scroll_config.get('enabled', self.scroll_enabled)
+        self.scroll_speed = float(scroll_config.get('speed', self.scroll_speed))
+        self.scroll_delay = float(scroll_config.get('delay', self.scroll_delay))
+        self.scroll_gap_width = scroll_config.get('gap_width', self.scroll_gap_width)
+        
+        # Clear cache for new settings
+        self.text_image_cache = None
+        self.scroll_position = 0
         
         self._calculate_text_dimensions()
         self.logger.info("Configuration updated")
@@ -353,6 +437,46 @@ class TrevorWorldPlugin(BasePlugin):
                 self.logger.error("'display_duration' must be a number")
                 return False
         
+        # Validate scroll settings (universal, not per-message)
+        if 'scroll' in self.config:
+            scroll = self.config['scroll']
+            if not isinstance(scroll, dict):
+                self.logger.error("'scroll' must be an object")
+                return False
+            
+            if 'enabled' in scroll:
+                if not isinstance(scroll['enabled'], bool):
+                    self.logger.error("'scroll.enabled' must be a boolean")
+                    return False
+            
+            if 'speed' in scroll:
+                try:
+                    speed = float(scroll['speed'])
+                    if not (0.1 <= speed <= 50):
+                        self.logger.warning(f"'scroll.speed' {speed} is outside typical range 0.1-50")
+                except (ValueError, TypeError):
+                    self.logger.error("'scroll.speed' must be a number")
+                    return False
+            
+            if 'delay' in scroll:
+                try:
+                    delay = float(scroll['delay'])
+                    if not (0.001 <= delay <= 0.1):
+                        self.logger.warning(f"'scroll.delay' {delay} is outside typical range 0.001-0.1")
+                except (ValueError, TypeError):
+                    self.logger.error("'scroll.delay' must be a number")
+                    return False
+            
+            if 'gap_width' in scroll:
+                try:
+                    gap = float(scroll['gap_width'])
+                    if gap < 0:
+                        self.logger.error("'scroll.gap_width' must be non-negative")
+                        return False
+                except (ValueError, TypeError):
+                    self.logger.error("'scroll.gap_width' must be a number")
+                    return False
+        
         self.logger.info("Configuration validated successfully")
         return True
 
@@ -365,6 +489,10 @@ class TrevorWorldPlugin(BasePlugin):
             'message_index': self.current_message_index,
             'total_messages': len(self.messages),
             'display_duration': self.current_display_duration,
+            'scroll_enabled': self.scroll_enabled,
+            'scroll_speed': self.scroll_speed,
+            'scroll_delay': self.scroll_delay,
+            'scroll_gap_width': self.scroll_gap_width,
         })
         return info
 

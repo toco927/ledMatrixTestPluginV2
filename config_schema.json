@@ -97,6 +97,40 @@
       "description": "Default duration (seconds) to display each message"
     },
 
+    "scroll": {
+      "type": "object",
+      "title": "Scrolling Settings",
+      "description": "Universal scrolling settings applied to all messages",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable scrolling for messages wider than display"
+        },
+        "speed": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 50,
+          "default": 1,
+          "description": "Pixels to scroll per frame"
+        },
+        "delay": {
+          "type": "number",
+          "minimum": 0.001,
+          "maximum": 0.1,
+          "default": 0.01,
+          "description": "Seconds to wait between scroll updates"
+        },
+        "gap_width": {
+          "type": "number",
+          "minimum": 0,
+          "default": 32,
+          "description": "Pixels of gap between text loops"
+        }
+      }
+    },
+
     "font_path": {
       "type": "string",
       "default": "assets/fonts/PressStart2P-Regular.ttf",
