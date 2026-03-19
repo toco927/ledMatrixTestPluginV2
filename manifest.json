@@ -1,7 +1,7 @@
 {
   "id": "trevor-world",
   "name": "Trevor's World",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "author": "toco927",
   "description": "A simple test plugin that displays a customizable message and font size. Testing purposes.",
   "entry_point": "manager.py",
@@ -19,8 +19,8 @@
   "download_url_template": "https://github.com/toco927/ledMatrixTestPluginV2/archive/refs/tags/v{version}.zip",
   "versions": [
     {
-      "released": "2026-03-16",
-      "version": "1.1.7",
+      "released": "2026-03-19",
+      "version": "1.1.8",
       "ledmatrix_min": "2.0.0"
     }
   ],
@@ -32,6 +32,7 @@
   "verified": true,
   "screenshot": "",
   "config_schema": "config_schema.json",
-   "compatible_versions": [">=2.0.0"]
+  "compatible_versions": [
+    ">=2.0.0"
+  ]
 }
-

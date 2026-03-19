@@ -1,19 +1,32 @@
 #!/bin/bash
+set -e
 
-v=$1
-if [ -z "$v" ]; then
-  echo "Usage: ./release.sh x.y.z"
-  exit 1
-fi
+FILE="manifest.json"
 
-jq --arg v "$v" '
+# get current version
+current=$(jq -r '.version' "$FILE")
+
+# split
+IFS='.' read -r major minor patch <<< "$current"
+
+# bump patch
+patch=$((patch + 1))
+new_version="$major.$minor.$patch"
+
+echo "Bumping: $current → $new_version"
+
+# update JSON
+jq --arg v "$new_version" '
   .version=$v |
   .versions[-1].version=$v |
   .versions[-1].released=(now | strftime("%Y-%m-%d"))
-' manifest.json > tmp.json && mv tmp.json manifest.json
+' "$FILE" > tmp.json && mv tmp.json "$FILE"
 
-git add -A &&
-git commit -m "Update script for version $v" &&
-git tag v$v &&
-git push origin main &&
-git push origin v$v
+# git
+git add -A
+git commit -m "Update script for version $new_version"
+git tag v$new_version
+git push origin main
+git push origin v$new_version
+
+echo "Done: v$new_version"
