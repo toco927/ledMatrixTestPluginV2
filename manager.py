@@ -114,7 +114,7 @@ class TrevorWorldPlugin(BasePlugin):
             self.current_display_duration = self.default_display_duration
             return
         
-        # Clamp index to valid range
+        # Clamp index to valid range, and loop
         if self.current_message_index >= len(self.messages):
             self.current_message_index = 0
         
