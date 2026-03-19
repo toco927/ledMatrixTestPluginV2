@@ -1,1 +1,2 @@
-v=1.1.6 && git add -A && git commit -m "Update script for version $v" && git tag $v && git push origin main && git push origin $v
+CHANGE VERSION NUMBER IN THE MANIFEST FIRST!
+v=1.1.7 && git add -A && git commit -m "Update script for version $v" && git tag $v && git push origin main && git push origin $v

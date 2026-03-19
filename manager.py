@@ -176,25 +176,26 @@ class TrevorWorldPlugin(BasePlugin):
         self._calculate_text_dimensions()
 
     def update(self):
-        """Update plugin - check if it's time to advance to next message."""
-        try:
-            # Check if current message display duration has elapsed
-            time_since_message_start = time.time() - self.message_start_time
-            if time_since_message_start > self.current_display_duration:
-                self._advance_to_next_message()
-                
-        except Exception as e:
-            self.logger.error(f"Error during update: {e}", exc_info=True)
+        """Update plugin - this is called periodically but timing is handled in display()."""
+        # Timing logic has been moved to display() for more accurate tracking
+        # since display() is only called when the plugin is actively being rendered
+        pass
 
     def display(self, force_clear=False):
         """
         Render the plugin display.
         
         Displays the current message with appended random number (1-10).
+        Handles message advancement timing to ensure accurate cycling.
         """
         try:
             if force_clear:
                 self.display_manager.clear()
+            
+            # Check if current message display duration has elapsed
+            time_since_message_start = time.time() - self.message_start_time
+            if time_since_message_start > self.current_display_duration:
+                self._advance_to_next_message()
             
             width = self.display_manager.width
             height = self.display_manager.height
