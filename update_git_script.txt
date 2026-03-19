@@ -1,1 +1,1 @@
-v=1.1.5 && git add -A && git commit -m "Update script for version $v" && git tag $v && git push origin main && git push origin $v
+v=1.1.6 && git add -A && git commit -m "Update script for version $v" && git tag $v && git push origin main && git push origin $v
