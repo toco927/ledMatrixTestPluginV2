@@ -200,8 +200,8 @@ class TrevorWorldPlugin(BasePlugin):
             display_text = f"{self.current_message} {self.current_random_number}"
             
             bbox = temp_draw.textbbox((0, 0), display_text, font=self.font)
-            self.message_width = bbox[2] - bbox[0]
-            self.message_height = bbox[3] - bbox[1]
+            self.message_width = int(bbox[2] - bbox[0])
+            self.message_height = int(bbox[3] - bbox[1])
             
             self.logger.debug(f"Text dimensions: {self.message_width}x{self.message_height}")
         except Exception as e:
@@ -219,8 +219,8 @@ class TrevorWorldPlugin(BasePlugin):
             height = self.display_manager.height
             display_text = f"{self.current_message} {self.current_random_number}"
             
-            # Cache width: display + message + display + gap
-            cache_width = width + self.message_width + width + self.scroll_gap_width
+            # Cache width: display + message + display + gap (ensure all are integers)
+            cache_width = int(width + self.message_width + width + self.scroll_gap_width)
             self.text_image_cache = Image.new('RGB', (cache_width, height), (0, 0, 0))
             draw = ImageDraw.Draw(self.text_image_cache)
             
@@ -228,8 +228,8 @@ class TrevorWorldPlugin(BasePlugin):
             temp_img = Image.new('RGB', (1, 1))
             temp_draw = ImageDraw.Draw(temp_img)
             bbox = temp_draw.textbbox((0, 0), display_text, font=self.font)
-            text_height = bbox[3] - bbox[1]
-            y_pos = (height - text_height) // 2 - bbox[1]
+            text_height = int(bbox[3] - bbox[1])
+            y_pos = int((height - text_height) // 2 - bbox[1])
             
             # Draw text starting after the initial display_width padding
             draw.text((width, y_pos), display_text, font=self.font, fill=self.current_message_color)
@@ -363,12 +363,12 @@ class TrevorWorldPlugin(BasePlugin):
             
             # Calculate text dimensions for centering
             bbox = draw.textbbox((0, 0), text, font=self.font)
-            text_width = bbox[2] - bbox[0]
-            text_height = bbox[3] - bbox[1]
+            text_width = int(bbox[2] - bbox[0])
+            text_height = int(bbox[3] - bbox[1])
             
             # Center text on display
-            x = (width - text_width) // 2
-            y = (height - text_height) // 2
+            x = int((width - text_width) // 2)
+            y = int((height - text_height) // 2)
             
             # Draw the text
             draw.text((x, y), text, font=self.font, fill=self.current_message_color)
