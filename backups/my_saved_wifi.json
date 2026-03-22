@@ -1,0 +1,50 @@
+{
+  "ap_ssid": "LEDMatrix-Setup",
+  "ap_password": "09272004",
+  "ap_channel": 7,
+  "auto_enable_ap_mode": true,
+  "saved_networks": [
+    {
+      "ssid": "BambuLabs",
+      "password": "09272004",
+      "saved_at": 1234567890.0
+    },
+    {
+      "ssid": "WhiteSky-Whistler",
+      "password": "k347kxmu",
+      "saved_at": 1234567891.0
+    },
+    {
+      "ssid": "855 WiFi_2.4Ghz",
+      "password": "77kiawah",
+      "saved_at": 1234567892.0
+    },
+    {
+      "ssid": "855 WiFi_2.4Ghz_EXT",
+      "password": "77kiawah",
+      "saved_at": 1234567893.0
+    },
+    {
+      "ssid": "Trevor's iPhone 13",
+      "password": "trevor09",
+      "saved_at": 1234567894.0
+    },
+    {
+      "ssid": "Trevor\u2019s iPhone 13",
+      "password": "trevor09",
+      "saved_at": 1774042696.440163
+    },
+    {
+      "ssid": "Delta Sigma Phi-Presentation",
+      "password": "Presenter",
+      "saved_at": 1774043369.0677638
+    },
+    {
+      "ssid": "916 Panferio",
+      "password": "Welcome1!",
+      "saved_at": 1774043370.0677638
+    }
+  ]
+}
+
+

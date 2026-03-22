@@ -1,13 +1,16 @@
 {
   "_comment": "Add this to your config/config.json to enable the Trevor's World plugin",
+  "_doc_scrolling": "Scrolling uses frame-based movement (pixels per frame). Lower CPU: 60 FPS, Balanced: 120 FPS, Smooth: 240 FPS",
+  "_doc_speed": "Scroll speed: 0.5 (slow), 1.0 (normal), 2.0 (fast). Delay: 0.01 (100 FPS), 0.02 (50 FPS)",
   "trevor-world": {
     "enabled": true,
     "font_family": "press_start",
     "message_font_size": 10,
     "color": [255, 255, 255],
     "display_duration": 5,
+    "target_fps": 120,
     "scroll": {
-      "enabled": false,
+      "enabled": true,
       "speed": 1,
       "delay": 0.01,
       "gap_width": 32
@@ -27,6 +30,11 @@
         "message": "Custom Message System",
         "display_duration": 6,
         "color": [255, 128, 0]
+      },
+      {
+        "message": "Frame-based Scrolling",
+        "display_duration": 5,
+        "color": [0, 255, 255]
       }
     ]
   }

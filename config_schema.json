@@ -97,10 +97,19 @@
       "description": "Default duration (seconds) to display each message"
     },
 
+    "target_fps": {
+      "type": "number",
+      "title": "Target Frame Rate",
+      "minimum": 30,
+      "maximum": 240,
+      "default": 120,
+      "description": "Target frame rate for smooth scrolling (30-240 FPS, higher = smoother but more CPU)"
+    },
+
     "scroll": {
       "type": "object",
       "title": "Scrolling Settings",
-      "description": "Universal scrolling settings applied to all messages",
+      "description": "Universal scrolling settings applied to all messages. Uses frame-based scrolling for smooth animation.",
       "additionalProperties": false,
       "properties": {
         "enabled": {
@@ -113,20 +122,20 @@
           "minimum": 0.1,
           "maximum": 50,
           "default": 1,
-          "description": "Pixels to scroll per frame"
+          "description": "Pixels per frame to scroll (higher = faster movement)"
         },
         "delay": {
           "type": "number",
           "minimum": 0.001,
           "maximum": 0.1,
           "default": 0.01,
-          "description": "Seconds to wait between scroll updates"
+          "description": "Seconds per frame (0.01 = 100 FPS throttle, 0.005 = 200 FPS throttle)"
         },
         "gap_width": {
           "type": "number",
           "minimum": 0,
           "default": 32,
-          "description": "Pixels of gap between text loops"
+          "description": "Pixels of gap between text loops (space between message cycles)"
         }
       }
     },

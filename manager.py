@@ -6,12 +6,18 @@ on the LED matrix with a random number (1-10) appended to each.
 Each message displays for its configured duration before cycling to the next.
 """
 
-from src.plugin_system.base_plugin import BasePlugin
+import logging
+import os
 import time
 import random
+from typing import Dict, Any
 from PIL import Image, ImageDraw, ImageFont
-import os
 from pathlib import Path
+
+from src.plugin_system.base_plugin import BasePlugin
+from src.common.scroll_helper import ScrollHelper
+
+logger = logging.getLogger(__name__)
 
 
 class TrevorWorldPlugin(BasePlugin):
@@ -40,6 +46,7 @@ class TrevorWorldPlugin(BasePlugin):
         self.scroll_enabled = scroll_config.get('enabled', False)
         self.scroll_speed = float(scroll_config.get('speed', 1))  # pixels per frame
         self.scroll_delay = float(scroll_config.get('delay', 0.01))  # seconds per frame
+        self.target_fps = float(config.get('target_fps', 120))  # target FPS for smooth scrolling
         self.scroll_gap_width = scroll_config.get('gap_width', 32)  # pixels between loop
         
         # Queue state
@@ -54,15 +61,45 @@ class TrevorWorldPlugin(BasePlugin):
         self.font = None
         self.message_width = 0
         self.message_height = 0
-        
-        # Scrolling state
-        self.scroll_position = 0
-        self.last_scroll_time = time.time()
         self.text_image_cache = None
+        
+        # Frame rate tracking for FPS logging
+        self.frame_count = 0
+        self.last_frame_time = None
+        self.last_fps_log_time = None
+        self.frame_times = []
         
         # Load font and set up first message
         self._load_font()
         self._load_current_message()
+        
+        # Initialize ScrollHelper for scrolling functionality
+        display_width = self.display_manager.width if hasattr(self.display_manager, 'width') else 128
+        display_height = self.display_manager.height if hasattr(self.display_manager, 'height') else 32
+        self.scroll_helper = ScrollHelper(display_width, display_height, logger=self.logger)
+        
+        # Configure ScrollHelper with plugin settings
+        if hasattr(self.scroll_helper, 'set_frame_based_scrolling'):
+            self.scroll_helper.set_frame_based_scrolling(True)
+            self.logger.info(f"Config scroll_speed: {self.scroll_speed} pixels/frame, scroll_delay: {self.scroll_delay}s")
+            self.scroll_helper.set_scroll_speed(self.scroll_speed)
+            if self.scroll_helper.scroll_speed != self.scroll_speed:
+                self.logger.warning(
+                    f"scroll_speed was clamped from {self.scroll_speed} to {self.scroll_helper.scroll_speed} pixels/frame"
+                )
+        else:
+            pixels_per_second = self.scroll_speed / self.scroll_delay if self.scroll_delay > 0 else self.scroll_speed * 100
+            self.scroll_helper.set_scroll_speed(pixels_per_second)
+        
+        self.scroll_helper.set_scroll_delay(self.scroll_delay)
+        
+        # Set target FPS from config (clamp to valid range)
+        target_fps = max(30.0, min(240.0, self.target_fps))
+        self.scroll_helper.set_target_fps(target_fps)
+        
+        # Calculate pixels per second for logging
+        pixels_per_second = self.scroll_speed / self.scroll_delay if self.scroll_delay > 0 else self.scroll_speed * 100
+        self.logger.info(f"Scroll settings: {self.scroll_speed} px/frame, {self.scroll_delay}s delay = {pixels_per_second:.1f} px/s, target FPS: {target_fps}")
         
         self.logger.info(f"Trevor's World plugin initialized with {len(self.messages)} messages")
 
@@ -162,20 +199,18 @@ class TrevorWorldPlugin(BasePlugin):
             # Add random number to message for width calculation
             display_text = f"{self.current_message} {self.current_random_number}"
             
-            if isinstance(self.font, ImageFont.FreeTypeFont) or isinstance(self.font, ImageFont.ImageFont):
-                bbox = temp_draw.textbbox((0, 0), display_text, font=self.font)
-                self.message_width = bbox[2] - bbox[0]
-                self.message_height = bbox[3] - bbox[1]
-            else:
-                self.message_width = len(display_text) * 8
-                self.message_height = 10
+            bbox = temp_draw.textbbox((0, 0), display_text, font=self.font)
+            self.message_width = bbox[2] - bbox[0]
+            self.message_height = bbox[3] - bbox[1]
+            
+            self.logger.debug(f"Text dimensions: {self.message_width}x{self.message_height}")
         except Exception as e:
             self.logger.warning(f"Could not calculate text dimensions: {e}")
             self.message_width = len(self.current_message) * 8
             self.message_height = 10
 
     def _create_scroll_cache(self):
-        """Create a cached image for scrolling text."""
+        """Create a cached image for scrolling text using ScrollHelper."""
         if not self.font or not self.message_width:
             return
         
@@ -189,13 +224,30 @@ class TrevorWorldPlugin(BasePlugin):
             self.text_image_cache = Image.new('RGB', (cache_width, height), (0, 0, 0))
             draw = ImageDraw.Draw(self.text_image_cache)
             
-            # Draw text in the middle section
-            y_pos = (height - self.message_height) // 2
+            # Calculate vertical centering
+            temp_img = Image.new('RGB', (1, 1))
+            temp_draw = ImageDraw.Draw(temp_img)
+            bbox = temp_draw.textbbox((0, 0), display_text, font=self.font)
+            text_height = bbox[3] - bbox[1]
+            y_pos = (height - text_height) // 2 - bbox[1]
+            
+            # Draw text starting after the initial display_width padding
             draw.text((width, y_pos), display_text, font=self.font, fill=self.current_message_color)
+            
+            # Ensure image is in RGB mode
+            if self.text_image_cache.mode != 'RGB':
+                self.text_image_cache = self.text_image_cache.convert('RGB')
+            
+            # Set the scrolling image in ScrollHelper
+            self.scroll_helper.set_scrolling_image(self.text_image_cache)
+            
+            # Verify it was set correctly
+            if self.scroll_helper.cached_image is None:
+                self.logger.error("Failed to set scrolling image in ScrollHelper")
             
             self.logger.debug(f"Created scroll cache: {cache_width}x{height}")
         except Exception as e:
-            self.logger.error(f"Failed to create scroll cache: {e}")
+            self.logger.error(f"Failed to create scroll cache: {e}", exc_info=True)
             self.text_image_cache = None
 
     def _advance_to_next_message(self):
@@ -211,13 +263,29 @@ class TrevorWorldPlugin(BasePlugin):
         self._load_current_message()
         self._calculate_text_dimensions()
         self.text_image_cache = None  # Clear cache for new message
-        self.scroll_position = 0  # Reset scroll position
+        if self.scroll_helper:
+            self.scroll_helper.reset_scroll()  # Reset scroll position
 
     def update(self):
-        """Update plugin - this is called periodically but timing is handled in display()."""
-        # Timing logic has been moved to display() for more accurate tracking
-        # since display() is only called when the plugin is actively being rendered
-        pass
+        """Update plugin - handle scroll position if scrolling is enabled."""
+        if not self.scroll_enabled or self.message_width <= self.display_manager.width:
+            # Reset scroll position if scrolling is disabled or text fits
+            if self.scroll_helper:
+                self.scroll_helper.reset_scroll()
+            return
+        
+        # Ensure cache is created before updating scroll position
+        if not self.text_image_cache:
+            self._create_scroll_cache()
+        
+        # Use ScrollHelper to update scroll position
+        if self.scroll_helper and self.text_image_cache:
+            # Verify scroll_helper has the image set
+            if self.scroll_helper.cached_image is None:
+                self.logger.warning("ScrollHelper cached_image is None, re-setting scrolling image")
+                self.scroll_helper.set_scrolling_image(self.text_image_cache)
+            
+            self.scroll_helper.update_scroll_position()
 
     def display(self, force_clear=False):
         """
@@ -251,62 +319,102 @@ class TrevorWorldPlugin(BasePlugin):
                 if not self.text_image_cache:
                     self._create_scroll_cache()
                 
-                if self.text_image_cache:
-                    # Update scroll position
-                    now = time.time()
-                    if now - self.last_scroll_time >= self.scroll_delay:
-                        self.scroll_position += self.scroll_speed
-                        cache_width = width + self.message_width + width + self.scroll_gap_width
-                        
-                        # Loop around
-                        if self.scroll_position > cache_width - width:
-                            self.scroll_position = 0
-                        
-                        self.last_scroll_time = now
+                if self.text_image_cache and self.scroll_helper:
+                    # Verify scroll_helper has the image set
+                    if self.scroll_helper.cached_image is None:
+                        self.logger.warning("ScrollHelper cached_image is None in display(), re-setting scrolling image")
+                        self.scroll_helper.set_scrolling_image(self.text_image_cache)
                     
-                    # Extract visible portion and display
-                    x_offset = int(self.scroll_position)
-                    visible = self.text_image_cache.crop((x_offset, 0, x_offset + width, height))
+                    # Get visible portion from ScrollHelper
+                    visible_image = self.scroll_helper.get_visible_portion()
                     
-                    if hasattr(self.display_manager, 'image') and self.display_manager.image is not None:
-                        self.display_manager.image.paste(visible, (0, 0))
+                    if visible_image:
+                        # Ensure display_manager.image exists and is the right size
+                        if not hasattr(self.display_manager, 'image') or self.display_manager.image is None:
+                            self.display_manager.image = Image.new('RGB', (width, height), (0, 0, 0))
+                        
+                        # Update display with visible portion
+                        self.display_manager.image.paste(visible_image, (0, 0))
+                        self.display_manager.update_display()
+                        
+                        # Log frame rate for scrolling text
+                        self._log_frame_rate()
+                        
+                        self.logger.debug(f"Displayed visible portion: scroll_position={self.scroll_helper.scroll_position:.2f}")
                     else:
-                        img = Image.new('RGB', (width, height), (0, 0, 0))
-                        img.paste(visible, (0, 0))
-                        self.display_manager.image = img
-                    
-                    self.display_manager.update_display()
-                    return
+                        self.logger.warning("ScrollHelper.get_visible_portion() returned None")
+                        # Fallback to static display
+                        self._display_static_text(display_text, width, height)
+                else:
+                    # Fallback: static text if cache creation failed
+                    self._display_static_text(display_text, width, height)
+            else:
+                # Static text (centered)
+                self._display_static_text(display_text, width, height)
             
-            # Non-scrolling: center text display
+        except Exception as e:
+            self.logger.error(f"Error during display: {e}", exc_info=True)
+    
+    def _display_static_text(self, text, width, height):
+        """Helper method to display static (non-scrolling) text."""
+        try:
             img = Image.new('RGB', (width, height), (0, 0, 0))
             draw = ImageDraw.Draw(img)
             
             # Calculate text dimensions for centering
-            try:
-                bbox = draw.textbbox((0, 0), display_text, font=self.font)
-                text_width = bbox[2] - bbox[0]
-                text_height = bbox[3] - bbox[1]
-            except Exception:
-                text_width = len(display_text) * 8
-                text_height = 10
+            bbox = draw.textbbox((0, 0), text, font=self.font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
             
             # Center text on display
             x = (width - text_width) // 2
             y = (height - text_height) // 2
             
             # Draw the text
-            try:
-                draw.text((x, y), display_text, font=self.font, fill=self.current_message_color)
-            except Exception as e:
-                self.logger.error(f"Error drawing text: {e}")
+            draw.text((x, y), text, font=self.font, fill=self.current_message_color)
             
             # Update display
             self.display_manager.image = img
             self.display_manager.update_display()
-            
         except Exception as e:
-            self.logger.error(f"Error during display: {e}", exc_info=True)
+            self.logger.error(f"Error displaying static text: {e}")
+    
+    def _log_frame_rate(self):
+        """Log frame rate statistics for scrolling text."""
+        if not self.scroll_enabled:
+            return
+        
+        current_time = time.time()
+        
+        # Initialize timing on first call
+        if self.last_frame_time is None:
+            self.last_frame_time = current_time
+            self.last_fps_log_time = current_time
+            return
+        
+        # Calculate instantaneous frame time
+        frame_time = current_time - self.last_frame_time
+        self.frame_times.append(frame_time)
+        
+        # Keep only last 100 frames for average
+        if len(self.frame_times) > 100:
+            self.frame_times.pop(0)
+        
+        # Log FPS every 5 seconds to avoid spam
+        if current_time - self.last_fps_log_time >= 5.0:
+            avg_frame_time = sum(self.frame_times) / len(self.frame_times) if self.frame_times else frame_time
+            avg_fps = 1.0 / avg_frame_time if avg_frame_time > 0 else 0
+            instant_fps = 1.0 / frame_time if frame_time > 0 else 0
+            
+            self.logger.info(
+                f"Message scroll FPS - Avg: {avg_fps:.1f}, Current: {instant_fps:.1f}, "
+                f"Frame time: {frame_time*1000:.2f}ms, Target: {self.target_fps:.0f} FPS"
+            )
+            self.last_fps_log_time = current_time
+            self.frame_count = 0
+        
+        self.last_frame_time = current_time
+        self.frame_count += 1
 
     def on_config_change(self, new_config):
         """Handle configuration changes at runtime."""
@@ -319,7 +427,8 @@ class TrevorWorldPlugin(BasePlugin):
             self.current_message_index = 0
             self._load_current_message()
             self.text_image_cache = None
-            self.scroll_position = 0
+            if self.scroll_helper:
+                self.scroll_helper.reset_scroll()
             self.logger.info(f"Messages updated: {len(self.messages)} messages loaded")
         
         # Update colors
@@ -337,14 +446,48 @@ class TrevorWorldPlugin(BasePlugin):
         
         # Update scroll settings
         scroll_config = new_config.get('scroll', {})
+        old_scroll_enabled = self.scroll_enabled
         self.scroll_enabled = scroll_config.get('enabled', self.scroll_enabled)
-        self.scroll_speed = float(scroll_config.get('speed', self.scroll_speed))
-        self.scroll_delay = float(scroll_config.get('delay', self.scroll_delay))
+        
+        # Update ScrollHelper settings if scroll speed, delay, or target_fps changed
+        new_scroll_speed = float(scroll_config.get('speed', self.scroll_speed))
+        new_scroll_delay = float(scroll_config.get('delay', self.scroll_delay))
+        new_target_fps = new_config.get('target_fps', self.target_fps)
+        
+        scroll_settings_changed = False
+        if new_scroll_speed != self.scroll_speed:
+            self.scroll_speed = new_scroll_speed
+            scroll_settings_changed = True
+        if new_scroll_delay != self.scroll_delay:
+            self.scroll_delay = new_scroll_delay
+            scroll_settings_changed = True
+        if new_target_fps != self.target_fps:
+            self.target_fps = float(new_target_fps)
+            scroll_settings_changed = True
+        
+        if scroll_settings_changed and self.scroll_helper:
+            if hasattr(self.scroll_helper, 'set_frame_based_scrolling'):
+                self.scroll_helper.set_scroll_speed(self.scroll_speed)
+            else:
+                pixels_per_second = self.scroll_speed / self.scroll_delay if self.scroll_delay > 0 else self.scroll_speed * 100
+                self.scroll_helper.set_scroll_speed(pixels_per_second)
+            
+            self.scroll_helper.set_scroll_delay(self.scroll_delay)
+            target_fps = max(30.0, min(240.0, self.target_fps))
+            self.scroll_helper.set_target_fps(target_fps)
+            self.logger.info(f"Scroll settings updated: speed={self.scroll_speed}, delay={self.scroll_delay}s, target FPS={target_fps}")
+        
+        # Reset scroll position if scroll was toggled
+        if old_scroll_enabled != self.scroll_enabled:
+            if self.scroll_helper:
+                self.scroll_helper.reset_scroll()
+            self.text_image_cache = None
+            self.logger.info(f"Scroll {'enabled' if self.scroll_enabled else 'disabled'}")
+        
         self.scroll_gap_width = scroll_config.get('gap_width', self.scroll_gap_width)
         
         # Clear cache for new settings
         self.text_image_cache = None
-        self.scroll_position = 0
         
         self._calculate_text_dimensions()
         self.logger.info("Configuration updated")
@@ -498,5 +641,9 @@ class TrevorWorldPlugin(BasePlugin):
 
     def cleanup(self):
         """Cleanup resources when plugin is unloaded."""
+        if self.scroll_helper:
+            self.scroll_helper.clear_cache()
+        self.text_image_cache = None
         self.logger.info("Cleaning up Trevor's World plugin")
         super().cleanup()
+

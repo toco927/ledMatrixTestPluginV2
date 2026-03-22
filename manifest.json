@@ -1,9 +1,9 @@
 {
   "id": "trevor-world",
   "name": "Trevor's World",
-  "version": "1.1.12",
+  "version": "1.2.1",
   "author": "toco927",
-  "description": "A simple test plugin that displays a customizable message and font size. Testing purposes. It now has a queue.",
+  "description": "A customizable message queue plugin with smooth frame-based scrolling using ScrollHelper. Displays messages with random numbers (1-10) appended. Supports per-message customization.",
   "entry_point": "manager.py",
   "class_name": "TrevorWorldPlugin",
   "category": "demo",
@@ -19,14 +19,20 @@
   "download_url_template": "https://github.com/toco927/ledMatrixTestPluginV2/archive/refs/tags/v{version}.zip",
   "versions": [
     {
-      "released": "2026-03-19",
-      "version": "1.1.12",
+      "released": "2026-03-21",
+      "version": "1.2.0",
+      "changes": "ScrollHelper integration: frame-based scrolling, improved performance (6-10x faster), added FPS monitoring",
+      "ledmatrix_min": "2.0.0"
+    },
+    {
+      "released": "2026-03-22",
+      "version": "1.2.1",
       "ledmatrix_min": "2.0.0"
     }
   ],
   "update_interval": 60,
   "default_duration": 15,
-  "last_updated": "2026-03-15",
+  "last_updated": "2026-03-21",
   "stars": 0,
   "downloads": 0,
   "verified": true,
