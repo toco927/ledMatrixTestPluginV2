@@ -211,13 +211,20 @@ class TrevorWorldPlugin(BasePlugin):
 
     def _create_scroll_cache(self):
         """Create a cached image for scrolling text using ScrollHelper."""
-        if not self.font or not self.message_width:
+        if not self.font:
+            self.logger.warning("_create_scroll_cache: Font not loaded")
+            return
+        
+        if not self.message_width:
+            self.logger.warning("_create_scroll_cache: Message width not calculated")
             return
         
         try:
             width = self.display_manager.width
             height = self.display_manager.height
             display_text = f"{self.current_message} {self.current_random_number}"
+            
+            self.logger.debug(f"Creating scroll cache: text='{display_text}', msg_width={self.message_width}, display={width}x{height}")
             
             # Cache width: display + message + display + gap (ensure all are integers)
             cache_width = int(width + self.message_width + width + self.scroll_gap_width)
@@ -244,10 +251,12 @@ class TrevorWorldPlugin(BasePlugin):
             # Verify it was set correctly
             if self.scroll_helper.cached_image is None:
                 self.logger.error("Failed to set scrolling image in ScrollHelper")
-            
-            self.logger.debug(f"Created scroll cache: {cache_width}x{height}")
+            else:
+                self.logger.info(f"Scroll cache created successfully: {cache_width}x{height}, text_y={y_pos}")
+                
         except Exception as e:
             self.logger.error(f"Failed to create scroll cache: {e}", exc_info=True)
+            self.text_image_cache = None
             self.text_image_cache = None
 
     def _advance_to_next_message(self):
@@ -268,23 +277,15 @@ class TrevorWorldPlugin(BasePlugin):
 
     def update(self):
         """Update plugin - handle scroll position if scrolling is enabled."""
+        # Only scroll if enabled and text is wider than display
         if not self.scroll_enabled or self.message_width <= self.display_manager.width:
             # Reset scroll position if scrolling is disabled or text fits
             if self.scroll_helper:
                 self.scroll_helper.reset_scroll()
             return
         
-        # Ensure cache is created before updating scroll position
-        if not self.text_image_cache:
-            self._create_scroll_cache()
-        
-        # Use ScrollHelper to update scroll position
-        if self.scroll_helper and self.text_image_cache:
-            # Verify scroll_helper has the image set
-            if self.scroll_helper.cached_image is None:
-                self.logger.warning("ScrollHelper cached_image is None, re-setting scrolling image")
-                self.scroll_helper.set_scrolling_image(self.text_image_cache)
-            
+        # Update scroll position for this frame
+        if self.scroll_helper:
             self.scroll_helper.update_scroll_position()
 
     def display(self, force_clear=False):
@@ -315,38 +316,35 @@ class TrevorWorldPlugin(BasePlugin):
             
             # Handle scrolling if enabled and text is wider than display
             if self.scroll_enabled and self.message_width > width:
+                self.logger.debug(f"Scrolling enabled: message_width={self.message_width}, display_width={width}")
+                
                 # Create cache if needed
                 if not self.text_image_cache:
                     self._create_scroll_cache()
                 
                 if self.text_image_cache and self.scroll_helper:
-                    # Verify scroll_helper has the image set
+                    # Ensure the image is set in ScrollHelper
                     if self.scroll_helper.cached_image is None:
-                        self.logger.warning("ScrollHelper cached_image is None in display(), re-setting scrolling image")
+                        self.logger.debug("Setting scrolling image in ScrollHelper")
                         self.scroll_helper.set_scrolling_image(self.text_image_cache)
                     
                     # Get visible portion from ScrollHelper
                     visible_image = self.scroll_helper.get_visible_portion()
                     
                     if visible_image:
-                        # Ensure display_manager.image exists and is the right size
+                        # Paste visible portion to display
                         if not hasattr(self.display_manager, 'image') or self.display_manager.image is None:
                             self.display_manager.image = Image.new('RGB', (width, height), (0, 0, 0))
                         
-                        # Update display with visible portion
                         self.display_manager.image.paste(visible_image, (0, 0))
                         self.display_manager.update_display()
                         
-                        # Log frame rate for scrolling text
-                        self._log_frame_rate()
-                        
-                        self.logger.debug(f"Displayed visible portion: scroll_position={self.scroll_helper.scroll_position:.2f}")
+                        self.logger.debug(f"Scrolling display: pos={self.scroll_helper.scroll_position:.1f}")
                     else:
-                        self.logger.warning("ScrollHelper.get_visible_portion() returned None")
-                        # Fallback to static display
+                        self.logger.warning("get_visible_portion() returned None")
                         self._display_static_text(display_text, width, height)
                 else:
-                    # Fallback: static text if cache creation failed
+                    self.logger.warning("text_image_cache or scroll_helper is None")
                     self._display_static_text(display_text, width, height)
             else:
                 # Static text (centered)

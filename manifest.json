@@ -1,7 +1,7 @@
 {
   "id": "trevor-world",
   "name": "Trevor's World",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "author": "toco927",
   "description": "A customizable message queue plugin with smooth frame-based scrolling using ScrollHelper. Displays messages with random numbers (1-10) appended. Supports per-message customization.",
   "entry_point": "manager.py",
@@ -26,7 +26,7 @@
     },
     {
       "released": "2026-03-22",
-      "version": "1.2.2",
+      "version": "1.2.3",
       "ledmatrix_min": "2.0.0"
     }
   ],
